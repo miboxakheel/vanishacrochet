@@ -7,3 +7,8 @@ vanisha-crochet.html
 backups/
 bin/
 index.zip
+
+# Local secrets for `wrangler pages dev` — never commit. Cloudflare's real
+# secrets live in the dashboard, set via `wrangler pages secret put`.
+.dev.vars
+.dev.vars.*
