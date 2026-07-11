@@ -134,8 +134,13 @@ async function fetchLockersAt(env, lat, lng) {
   });
   if (!res.ok) throw new Error('Bob Go locations fetch failed: ' + res.status);
   const data = await res.json();
+  // Bob Go can list the same physical locker once per provider offering it
+  // (verified: your sandbox account has both a "demo" and "sandbox" provider
+  // serving the same locker, returned as two identical entries) — dedupe by id.
+  const seen = new Set();
   const lockers = (data.locations || [])
     .filter(l => l.active !== false && (!l.compartment_errors || !l.compartment_errors.length))
+    .filter(l => { if (seen.has(l.id)) return false; seen.add(l.id); return true; })
     .map(normalizeLocker);
 
   // Daily cache — never hardcoded, never hit per keystroke.
