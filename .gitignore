@@ -1,0 +1,9 @@
+# This repo is the Cloudflare Pages deploy root (index.html + functions/ +
+# wrangler.toml only). Everything below stays local — admin-dashboard.html is
+# deliberately not deployed yet (handoff §8 item 4), and these are working
+# copies / scratch, not deploy artifacts.
+admin-dashboard.html
+vanisha-crochet.html
+backups/
+bin/
+index.zip
