@@ -125,7 +125,9 @@ async function fetchLockersAt(env, lat, lng) {
   // Round to ~1.1km grid so nearby searches (different suburbs a few blocks
   // apart) share a cache entry instead of each making their own Bob Go call.
   const gridKey = `${lat.toFixed(2)},${lng.toFixed(2)}`;
-  const cacheKey = new Request(`https://internal.cache/bobgo-lockers-${gridKey}-v3`);
+  // v4: bumped because v3 entries were cached with pre-dedupe duplicate data —
+  // this forces a clean refetch instead of serving the stale cached response.
+  const cacheKey = new Request(`https://internal.cache/bobgo-lockers-${gridKey}-v4`);
   const cached = await cache.match(cacheKey);
   if (cached) return cached.json();
 
