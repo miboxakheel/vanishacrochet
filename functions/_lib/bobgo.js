@@ -66,32 +66,42 @@ function matchesQuery(locker, q) {
 }
 
 // ── Real mode: /locations needs lat/lng, there's no free-text search ──────
-// A small static table of major SA metro coordinates avoids pulling in a
-// third-party geocoder for what's still just an approximate "search near me".
-const SA_CITY_COORDS = [
-  { key: 'cape town', lat: -33.9249, lng: 18.4241 },
-  { key: 'century city', lat: -33.8934, lng: 18.5107 },
-  { key: 'claremont', lat: -33.9814, lng: 18.4665 },
-  { key: 'stellenbosch', lat: -33.9321, lng: 18.8602 },
-  { key: 'paarl', lat: -33.7342, lng: 18.9621 },
-  { key: 'johannesburg', lat: -26.2041, lng: 28.0473 },
-  { key: 'joburg', lat: -26.2041, lng: 28.0473 },
-  { key: 'sandton', lat: -26.1076, lng: 28.0567 },
-  { key: 'rosebank', lat: -26.1467, lng: 28.0436 },
-  { key: 'pretoria', lat: -25.7479, lng: 28.2293 },
-  { key: 'centurion', lat: -25.8601, lng: 28.1894 },
-  { key: 'durban', lat: -29.8587, lng: 31.0218 },
-  { key: 'umhlanga', lat: -29.7263, lng: 31.0699 },
-  { key: 'port elizabeth', lat: -33.9608, lng: 25.6022 },
-  { key: 'gqeberha', lat: -33.9608, lng: 25.6022 },
-  { key: 'bloemfontein', lat: -29.0852, lng: 26.1596 },
-  { key: 'east london', lat: -33.0153, lng: 27.9116 }
-];
+// Verified directly (2026-07-11): passing an `address` param alongside/without
+// lat/lng does nothing — Bob Go's /locations always follows the literal
+// coordinates. So an arbitrary suburb/town search needs real geocoding first.
+// Using OpenStreetMap's Nominatim (free, no signup/API key) rather than a
+// hand-maintained coordinate table — a short list can only ever cover a
+// handful of named metros, and fabricating coordinates for hundreds of real
+// SA suburbs from memory risked silently wrong entries with no way to verify
+// them. Nominatim's usage policy requires a real identifying User-Agent (the
+// default one gets an "Access denied" — confirmed while testing) and caps
+// at ~1 request/sec, which client-side debouncing plus this cache comfortably
+// stays under at this store's volume.
+const NOMINATIM_USER_AGENT = 'VanishaCrochet/1.0 (+https://vanishacrochet.co.za; orders@vanishacrochet.co.za)';
 
-function resolveCityFromQuery(q) {
-  if (!q) return null;
-  const needle = q.trim().toLowerCase();
-  return SA_CITY_COORDS.find(c => needle.indexOf(c.key) !== -1) || null;
+async function geocodeQuery(env, near) {
+  const cache = caches.default;
+  const cacheKey = new Request(`https://internal.cache/geocode-${encodeURIComponent(near.trim().toLowerCase())}-v1`);
+  const cached = await cache.match(cacheKey);
+  if (cached) {
+    const text = await cached.text();
+    return text ? JSON.parse(text) : null;
+  }
+
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=za&q=${encodeURIComponent(near)}`;
+  const res = await fetch(url, { headers: { 'User-Agent': NOMINATIM_USER_AGENT, 'Accept-Language': 'en' } });
+  if (!res.ok) throw new Error('Geocoding request failed: ' + res.status);
+  const results = await res.json();
+  const coords = results.length ? { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) } : null;
+
+  // Cache both hits and misses for 30 days — place coordinates (or the fact
+  // that a typo'd query has no match) don't change, and this is what keeps
+  // repeat/common searches from re-hitting Nominatim at all.
+  const cacheResponse = new Response(JSON.stringify(coords), {
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=2592000' }
+  });
+  await cache.put(cacheKey, cacheResponse.clone());
+  return coords;
 }
 
 function normalizeLocker(l) {
@@ -108,13 +118,16 @@ function normalizeLocker(l) {
   };
 }
 
-async function fetchLockersNearCity(env, city) {
+async function fetchLockersAt(env, lat, lng) {
   const cache = caches.default;
-  const cacheKey = new Request(`https://internal.cache/bobgo-lockers-${encodeURIComponent(city.key)}-v2`);
+  // Round to ~1.1km grid so nearby searches (different suburbs a few blocks
+  // apart) share a cache entry instead of each making their own Bob Go call.
+  const gridKey = `${lat.toFixed(2)},${lng.toFixed(2)}`;
+  const cacheKey = new Request(`https://internal.cache/bobgo-lockers-${gridKey}-v3`);
   const cached = await cache.match(cacheKey);
   if (cached) return cached.json();
 
-  const res = await fetch(`${bobgoBase(env)}/locations?lat=${city.lat}&lng=${city.lng}`, {
+  const res = await fetch(`${bobgoBase(env)}/locations?lat=${lat}&lng=${lng}`, {
     headers: { Authorization: `Bearer ${env.BOBGO_API_KEY}`, Accept: 'application/json' }
   });
   if (!res.ok) throw new Error('Bob Go locations fetch failed: ' + res.status);
@@ -123,7 +136,7 @@ async function fetchLockersNearCity(env, city) {
     .filter(l => l.active !== false && (!l.compartment_errors || !l.compartment_errors.length))
     .map(normalizeLocker);
 
-  // Daily cache per known city — never hardcoded, never hit per keystroke.
+  // Daily cache — never hardcoded, never hit per keystroke.
   const cacheResponse = new Response(JSON.stringify(lockers), {
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=86400' }
   });
@@ -135,10 +148,11 @@ export async function fetchLockers(env, near) {
   if (env.MOCK_DELIVERY === 'true') {
     return MOCK_LOCKERS.filter(l => matchesQuery(l, near));
   }
+  if (!near || !near.trim()) return [];
 
-  const city = resolveCityFromQuery(near);
-  if (!city) return []; // unrecognised area — ask the customer to name a known town/city
-  return fetchLockersNearCity(env, city);
+  const coords = await geocodeQuery(env, near);
+  if (!coords) return []; // Nominatim couldn't place it — ask the customer to be more specific
+  return fetchLockersAt(env, coords.lat, coords.lng);
 }
 
 // ── Rates ───────────────────────────────────────────────────────────────

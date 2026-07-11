@@ -3838,32 +3838,51 @@ footer > *{position:relative;z-index:1}
 
   window.onLockerSearchInput = function() {
     clearTimeout(lockerSearchTimer);
-    lockerSearchTimer = setTimeout(searchLockers, 350);
+    var q = document.getElementById('ck-locker-search').value.trim();
+    if (q.length < 3) {
+      // Real geocoding backs this search now — don't fire it on 1-2 chars.
+      var el = document.getElementById('lockerResults');
+      if (el) el.innerHTML = q.length ? '<div style="font-size:12px;color:var(--tl);padding:8px 0">Keep typing…</div>' : '';
+      return;
+    }
+    var el2 = document.getElementById('lockerResults');
+    if (el2) el2.innerHTML = '<div style="font-size:12px;color:var(--tl);padding:8px 0">Searching…</div>';
+    lockerSearchTimer = setTimeout(searchLockers, 500);
   };
 
   async function searchLockers() {
     var q = document.getElementById('ck-locker-search').value.trim();
+    if (q.length < 3) return;
     var apiBase = (window.VC_CONFIG && window.VC_CONFIG.WORKER_BASE_URL) || '';
     try {
       var res = await fetch(apiBase + '/api/ship/lockers?near=' + encodeURIComponent(q));
       var data = await res.json();
-      renderLockerResults(data.ok ? data.lockers : []);
+      renderLockerResults(data.ok ? data.lockers : [], q);
     } catch (e) {
-      renderLockerResults([]);
+      renderLockerResults([], q);
     }
   }
 
-  function renderLockerResults(lockers) {
+  // Query is raw user input and locker name/address now comes from a real
+  // external API (Bob Go/Nominatim) — escape before inserting into innerHTML.
+  function escLockerText(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+
+  function renderLockerResults(lockers, query) {
     lastLockerResults = lockers;
     var el = document.getElementById('lockerResults');
     if (!el) return;
     if (!lockers.length) {
-      el.innerHTML = '<div style="font-size:12px;color:var(--tl);padding:8px 0">No lockers found — try a different suburb or town.</div>';
+      el.innerHTML = '<div style="font-size:12px;color:var(--tl);padding:8px 0">' +
+        'No lockers found near "' + escLockerText(query) + '" — try naming the suburb or town more specifically (e.g. "Rondebosch, Cape Town").</div>';
       return;
     }
     el.innerHTML = lockers.map(function(l, i) {
       return '<div class="locker-result" onclick="selectLockerByIndex(' + i + ')" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:13px">' +
-        '<strong>' + l.name + '</strong><br><span style="color:var(--tl);font-size:12px">' + l.address + ' · ' + l.hours + '</span></div>';
+        '<strong>' + escLockerText(l.name) + '</strong><br><span style="color:var(--tl);font-size:12px">' + escLockerText(l.address) + ' · ' + escLockerText(l.hours) + '</span></div>';
     }).join('');
   }
 
