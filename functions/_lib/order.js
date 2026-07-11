@@ -3,8 +3,8 @@ import { sendMail } from './sendEmail.js';
 import { buildCustomerEmail, buildVanishaEmail } from './orderEmail.js';
 
 // Shared by the real Paystack webhook, /api/pay/verify's belt-and-braces
-// fallback, and the MOCK_MODE "simulate success" button — one code path so
-// "mark paid + notify" only ever happens once, however it's triggered.
+// fallback, and the MOCK_PAYMENTS "simulate success" button — one code path
+// so "mark paid + notify" only ever happens once, however it's triggered.
 //
 // NOTE on status value: the spec draft said mark status:'paid', but
 // admin-dashboard.html's actual order-management UI (renderAdminOrders/

@@ -3,9 +3,10 @@
 //         delivery:{type:'pickup'|'locker'|'door', lockerId, street,city,province,postalCode,country},
 //         notes, items:[{kind,id,size,color,qty}], accessToken }
 // Recomputes the order total from Supabase (never trusts the client's numbers),
-// resolves shipping (Bob Go live rate for locker/door, 0 for pickup), creates
-// the order server-side, then either returns a MOCK_MODE fake-success payload
-// or a real Paystack authorization_url to redirect the browser to.
+// resolves shipping (Bob Go live rate for locker/door, 0 for pickup — gated by
+// MOCK_DELIVERY inside bobgo.js), creates the order server-side, then either
+// returns a MOCK_PAYMENTS fake-success payload or a real Paystack
+// authorization_url to redirect the browser to.
 import { sbSelect, sbInsert, sbUpsert, sbGetUserFromToken } from '../../_lib/supabase.js';
 import { computeOrderTotals, applyShipping, flatFallbackShipping } from '../../_lib/pricing.js';
 import { fetchRate } from '../../_lib/bobgo.js';
@@ -155,7 +156,7 @@ export async function onRequestPost({ request, env }) {
       await sbUpsert(env, 'pattern_purchases', purchaseRows, 'user_id,local_pattern_id');
     }
 
-    const mock = env.MOCK_MODE === 'true';
+    const mock = env.MOCK_PAYMENTS === 'true';
     const responseBase = {
       ok: true,
       mock,

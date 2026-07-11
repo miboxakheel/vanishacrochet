@@ -1,7 +1,7 @@
 // GET /api/ship/lockers?near=<suburb/town/query>
 // Returns the Bob Box/PUDO locker list (optionally filtered by a free-text
 // search). Never hardcoded into the site — this always comes from here (mock
-// data in MOCK_MODE, Bob Go's daily-cached full list otherwise).
+// data when MOCK_DELIVERY is true, Bob Go's daily-cached list otherwise).
 import { fetchLockers } from '../../_lib/bobgo.js';
 
 function json(data, status) {

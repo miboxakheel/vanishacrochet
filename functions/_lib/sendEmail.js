@@ -30,8 +30,8 @@ function buildRawMime({ fromEmail, fromName, toEmail, toName, subject, html, tex
 }
 
 export async function sendMail(env, { toEmail, toName, subject, html, text }) {
-  if (env.MOCK_MODE === 'true') {
-    console.log('[MOCK EMAIL] to=' + toEmail + ' subject="' + subject + '" (not actually sent — MOCK_MODE)');
+  if (env.MOCK_PAYMENTS === 'true') {
+    console.log('[MOCK EMAIL] to=' + toEmail + ' subject="' + subject + '" (not actually sent — MOCK_PAYMENTS)');
     return { ok: true, mocked: true };
   }
   const fromEmail = env.ORDERS_FROM_EMAIL || 'orders@vanishacrochet.co.za';

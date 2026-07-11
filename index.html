@@ -1599,7 +1599,13 @@ footer > *{position:relative;z-index:1}
   // reads from here. The Supabase anon/publishable key is safe client-side by design; it is
   // NOT a secret and must stay here (server-only secrets live in Cloudflare Worker env vars, see spec Task 0).
   window.VC_CONFIG = {
-    MOCK_MODE: true,                              // flip to false at go-live (handoff §7 checklist item 6)
+    // Split so each integration can go live independently — e.g. real Bob Go
+    // delivery while Paystack is still a placeholder key (handoff §7 checklist).
+    // Not currently read by any client-side branching (all mock decisions are
+    // made server-side and reported back via each API response's `mock` flag);
+    // kept here for visibility/consistency with wrangler.toml.
+    MOCK_PAYMENTS: true,
+    MOCK_DELIVERY: false,
     SUPABASE_URL: 'https://zcmabrdkrpgkzoclqozv.supabase.co',
     SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjbWFicmRrcnBna3pvY2xxb3p2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3MTkwMzEsImV4cCI6MjA5ODI5NTAzMX0.AQWDf40v1ZTgN2nEdtzUcEXHssmFcQrkvaWV-em7p3E', // classic JWT format — the sb_publishable_ format caused a 401 (see spec corrections banner)
     PAYSTACK_PUBLIC_KEY: 'pk_test_PLACEHOLDER',    // public key is safe client-side; test→live is a swap
@@ -2544,7 +2550,7 @@ footer > *{position:relative;z-index:1}
     <p class="confirm-sub" id="confirmMsg">Thank you! Your order has been received. We will be in touch via WhatsApp shortly.</p>
     <div class="confirm-details" id="confirmDetails"></div>
     <div id="mockPaySimBox" style="display:none;margin:14px 0;padding:14px 16px;background:#fffbeb;border:1px solid #f59e0b;border-radius:10px;font-size:13px;color:#78350f">
-      <strong>Test mode:</strong> this order is waiting on a payment. In MOCK_MODE there's no real Paystack charge — use the button below to simulate the webhook and unlock the order.
+      <strong>Test mode:</strong> this order is waiting on a payment. Payments are still in test mode (MOCK_PAYMENTS) — no real Paystack charge — use the button below to simulate the webhook and unlock the order.
       <div style="margin-top:10px"><button class="btn-primary" id="mockPaySimBtn" onclick="simulateMockPayment()">Simulate Payment Success</button></div>
     </div>
     <div class="confirm-actions">
@@ -4154,8 +4160,8 @@ footer > *{position:relative;z-index:1}
   // Order creation + pricing now happens server-side (Cloudflare Pages
   // Function /api/pay/init) so a tampered client total can never be charged.
   // Real payment: server returns a Paystack authorization_url and the browser
-  // redirects there. MOCK_MODE: server creates the same 'pending' order but
-  // returns {mock:true} instead of calling Paystack, and the confirm page
+  // redirects there. MOCK_PAYMENTS: server creates the same 'pending' order
+  // but returns {mock:true} instead of calling Paystack, and the confirm page
   // shows a "Simulate Payment Success" button (see simulateMockPayment()).
   window.confirmAndPlace = async function() {
     var btn = document.getElementById('confirmPlaceBtn');
@@ -4296,8 +4302,8 @@ footer > *{position:relative;z-index:1}
     }
   }
 
-  // MOCK_MODE only — the button shown on the confirm page while an order is
-  // waiting on a (simulated) payment. Calls the same mark-paid-and-notify
+  // MOCK_PAYMENTS only — the button shown on the confirm page while an order
+  // is waiting on a (simulated) payment. Calls the same mark-paid-and-notify
   // path a real Paystack webhook would use.
   window.simulateMockPayment = async function() {
     if (!lastOrder) return;
@@ -4315,7 +4321,7 @@ footer > *{position:relative;z-index:1}
         var simBox = document.getElementById('mockPaySimBox');
         if (simBox) simBox.style.display = 'none';
         renderConfirmPage(lastOrder, false);
-        showToast('Payment simulated — confirmation emails would be sent (see the Function logs in MOCK_MODE)');
+        showToast('Payment simulated — confirmation emails would be sent (see the Function logs — MOCK_PAYMENTS)');
       } else {
         showToast(data.error || 'Could not simulate payment');
         if (btn) { btn.disabled = false; btn.textContent = 'Simulate Payment Success'; }

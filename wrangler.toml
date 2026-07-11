@@ -9,7 +9,10 @@ pages_build_output_dir = "."
 
 # ── Non-secret vars (safe to commit; mirror window.VC_CONFIG on the client) ──
 [vars]
-MOCK_MODE = "true"                          # flip to "false" at go-live (handoff §7 checklist item 6)
+# Split so each integration can go live independently — e.g. real Bob Go
+# delivery (real sandbox key set) while Paystack is still a placeholder key.
+MOCK_PAYMENTS = "true"                       # Paystack — flip to "false" once real Paystack keys are in (handoff §7 checklist item 6)
+MOCK_DELIVERY = "false"                      # Bob Go — real sandbox key is set (BOBGO_API_KEY secret), delivery runs for real
 CURRENCY = "R"
 CURRENCY_CODE = "ZAR"
 STORE_NAME = "Vanisha Crochet"
@@ -17,13 +20,13 @@ ORDERS_FROM_EMAIL = "orders@vanishacrochet.co.za"
 VANISHA_NOTIFY_EMAIL = ""                   # PASTE Vanisha's real inbox once known — order notifications go nowhere until set
 SUPABASE_URL = "https://zcmabrdkrpgkzoclqozv.supabase.co"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjbWFicmRrcnBna3pvY2xxb3p2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3MTkwMzEsImV4cCI6MjA5ODI5NTAzMX0.AQWDf40v1ZTgN2nEdtzUcEXHssmFcQrkvaWV-em7p3E"  # public/publishable key — same one already in vanisha-crochet.html, not a secret
-BOBGO_ENV = "sandbox"                       # "sandbox" or "production" — which Bob Go API base URL functions/_lib/bobgo.js calls (irrelevant while MOCK_MODE=true)
+BOBGO_ENV = "sandbox"                       # "sandbox" or "production" — which Bob Go API base URL functions/_lib/bobgo.js calls
 
 # Vanisha's actual collection/dispatch address — Bob Go has no pre-configured
-# warehouse address on the account (checked /accounts), so real (non-mock)
-# rate requests need this to compute a real "collection_address". PLACEHOLDER
-# — real rates will be wrong/meaningless until these are filled in. Irrelevant
-# while MOCK_MODE=true.
+# warehouse address on the account (checked /accounts), so real rate requests
+# need this to compute a real "collection_address". PLACEHOLDER — real rates
+# will be wrong/meaningless until these are filled in. (Irrelevant only if
+# MOCK_DELIVERY is ever flipped back to "true".)
 SHIP_FROM_STREET = ""
 SHIP_FROM_SUBURB = ""
 SHIP_FROM_CITY = ""

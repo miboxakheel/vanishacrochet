@@ -132,7 +132,7 @@ async function fetchLockersNearCity(env, city) {
 }
 
 export async function fetchLockers(env, near) {
-  if (env.MOCK_MODE === 'true') {
+  if (env.MOCK_DELIVERY === 'true') {
     return MOCK_LOCKERS.filter(l => matchesQuery(l, near));
   }
 
@@ -241,7 +241,7 @@ export async function fetchRate(env, { method, dest, oversize, destCity, destPro
     return { ok: false, error: method === 'locker' ? 'Please choose a locker' : 'Delivery address required' };
   }
 
-  if (env.MOCK_MODE === 'true') {
+  if (env.MOCK_DELIVERY === 'true') {
     const h = hashString(String(dest));
     if (method === 'locker') {
       return { ok: true, rate: 60 + (h % 16), currency: 'ZAR', service: 'PUDO Locker-to-Locker', etaDays: '1-3' };

@@ -1,9 +1,9 @@
-// POST /api/pay/mock-confirm — MOCK_MODE-only. Body: { reference }.
+// POST /api/pay/mock-confirm — MOCK_PAYMENTS-only. Body: { reference }.
 // This is the target of the checkout's "Simulate Payment Success" button
 // (spec Task 3: "the webhook path is exercised by a simulate-success
 // button"). Runs the exact same mark-paid-and-notify path a real Paystack
 // webhook would, so the mocked flow proves out the same code the real one
-// uses. Refuses to run outside MOCK_MODE so it can never be used to
+// uses. Refuses to run outside MOCK_PAYMENTS so it can never be used to
 // free-confirm a real order.
 import { markOrderConfirmedAndNotify } from '../../_lib/order.js';
 
@@ -15,8 +15,8 @@ function json(data, status) {
 }
 
 export async function onRequestPost({ request, env }) {
-  if (env.MOCK_MODE !== 'true') {
-    return json({ ok: false, error: 'mock-confirm is only available in MOCK_MODE' }, 403);
+  if (env.MOCK_PAYMENTS !== 'true') {
+    return json({ ok: false, error: 'mock-confirm is only available in MOCK_PAYMENTS' }, 403);
   }
 
   let body;

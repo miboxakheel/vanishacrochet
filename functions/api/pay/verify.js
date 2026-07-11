@@ -2,9 +2,9 @@
 // Belt-and-braces check used by the confirmation page after Paystack
 // redirects the browser back via callback_url. The webhook is the
 // authoritative "mark paid" path; this just reads current status, and — only
-// if the webhook hasn't landed yet and we're not in MOCK_MODE — double-checks
-// directly with Paystack so the customer isn't stuck on "pending" for an
-// order that actually succeeded.
+// if the webhook hasn't landed yet and we're not in MOCK_PAYMENTS — double-
+// checks directly with Paystack so the customer isn't stuck on "pending" for
+// an order that actually succeeded.
 import { sbSelect } from '../../_lib/supabase.js';
 import { paystackVerify } from '../../_lib/paystack.js';
 import { markOrderConfirmedAndNotify } from '../../_lib/order.js';
@@ -29,7 +29,7 @@ export async function onRequestGet({ request, env }) {
     let order = rows[0];
     if (!order) return json({ ok: false, error: 'order not found' }, 404);
 
-    if (order.status === 'pending' && env.MOCK_MODE !== 'true') {
+    if (order.status === 'pending' && env.MOCK_PAYMENTS !== 'true') {
       try {
         const psData = await paystackVerify(env, reference);
         if (psData.status === 'success') {
