@@ -1,4 +1,6 @@
 // Bob Go / PUDO ("Bob Box") locker + rate integration.
+// deploy-marker: 2026-07-12a (forces a genuinely new commit so Cloudflare
+// can't re-promote a stale build — see chat history for why this is here)
 //
 // REAL API — VERIFIED against the live sandbox (2026-07-11, using a real
 // BOBGO_API_KEY in .dev.vars). Their docs site (api-docs.bob.co.za) is a
