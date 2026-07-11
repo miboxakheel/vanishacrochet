@@ -278,7 +278,13 @@ export async function fetchRate(env, { method, dest, oversize, destCity, destPro
 
   let deliveryAddress, pickupPointLocationId;
   if (method === 'locker') {
-    pickupPointLocationId = dest;
+    // Bob Go requires this as a real JSON number (int64) — dest arrives here
+    // as a string (it's a URL query param), so it must be converted, not
+    // passed straight through, or the request is rejected as malformed JSON.
+    pickupPointLocationId = Number(dest);
+    if (!Number.isFinite(pickupPointLocationId)) {
+      return { ok: false, error: 'Invalid locker selected' };
+    }
     // Bob Go still requires *a* delivery_address on the request even though
     // pickup_point_location_id drives the actual quote — use the locker's
     // own city/province if the caller has it, else fall back to the origin.
