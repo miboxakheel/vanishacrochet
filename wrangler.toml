@@ -17,10 +17,12 @@ ORDERS_FROM_EMAIL = "orders@vanishacrochet.co.za"
 VANISHA_NOTIFY_EMAIL = ""                   # PASTE Vanisha's real inbox once known — order notifications go nowhere until set
 SUPABASE_URL = "https://zcmabrdkrpgkzoclqozv.supabase.co"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjbWFicmRrcnBna3pvY2xxb3p2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3MTkwMzEsImV4cCI6MjA5ODI5NTAzMX0.AQWDf40v1ZTgN2nEdtzUcEXHssmFcQrkvaWV-em7p3E"  # public/publishable key — same one already in vanisha-crochet.html, not a secret
+BOBGO_ENV = "sandbox"                       # "sandbox" or "production" — which Bob Go API base URL functions/_lib/bobgo.js calls (irrelevant while MOCK_MODE=true)
 
 # ── SECRETS — do NOT add these here. Create with:
 #      wrangler pages secret put PAYSTACK_SECRET_KEY
 #      wrangler pages secret put SUPABASE_SERVICE_ROLE_KEY
+#      wrangler pages secret put BOBGO_API_KEY
 #    (or paste them into the dashboard's Environment variables screen as
 #    "Encrypted" — never "Plaintext"). See the build summary for the exact
 #    list and what each one is for.

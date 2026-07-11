@@ -1055,7 +1055,7 @@ footer{background:linear-gradient(135deg,#20343A 0%,#1B2A2E 45%,#2A1F1A 100%);co
   .order-summary{position:static;top:auto}
 
   /* Delivery method cards */
-  #dm-delivery,#dm-pickup{font-size:12px}
+  #dm-locker,#dm-door,#dm-pickup{font-size:12px}
 
   /* Contact */
   .contact-wrap{grid-template-columns:1fr;gap:20px}
@@ -1601,7 +1601,7 @@ footer > *{position:relative;z-index:1}
   window.VC_CONFIG = {
     MOCK_MODE: true,                              // flip to false at go-live (handoff §7 checklist item 6)
     SUPABASE_URL: 'https://zcmabrdkrpgkzoclqozv.supabase.co',
-    SUPABASE_ANON_KEY: 'sb_publishable_w76G1WtEC-FlwzgDqOIabg_F-uuD-RQ',
+    SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjbWFicmRrcnBna3pvY2xxb3p2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3MTkwMzEsImV4cCI6MjA5ODI5NTAzMX0.AQWDf40v1ZTgN2nEdtzUcEXHssmFcQrkvaWV-em7p3E', // classic JWT format — the sb_publishable_ format caused a 401 (see spec corrections banner)
     PAYSTACK_PUBLIC_KEY: 'pk_test_PLACEHOLDER',    // public key is safe client-side; test→live is a swap
     WORKER_BASE_URL: '',                           // '' = same origin (Cloudflare Pages+Functions)
     CURRENCY: 'R',
@@ -2399,15 +2399,27 @@ footer > *{position:relative;z-index:1}
             <h3>Delivery Method</h3>
           </div>
 
+          <div id="oversizeNotice" style="display:none;margin-bottom:14px;padding:12px 14px;background:#fffbeb;border:1px solid #f59e0b;border-radius:10px;font-size:13px;color:#78350f">
+            One or more items in your basket are too large for a PUDO locker — please choose door delivery or collection.
+          </div>
+
           <!-- Delivery method toggle -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
-            <div class="pay-card active" id="dm-delivery" onclick="selectDelivery('delivery')">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:18px">
+            <div class="pay-card active" id="dm-locker" onclick="selectDelivery('locker')">
+              <div class="pc-check">✓</div>
+              <div class="pc-head">
+                <div class="pc-logo">🔒</div>
+                <div class="pc-name">Locker</div>
+              </div>
+              <div class="pc-desc" id="dm-locker-desc">Collect from a PUDO locker — cheapest</div>
+            </div>
+            <div class="pay-card" id="dm-door" onclick="selectDelivery('door')">
               <div class="pc-check">✓</div>
               <div class="pc-head">
                 <div class="pc-logo">🚚</div>
-                <div class="pc-name">Home Delivery</div>
+                <div class="pc-name">Door Delivery</div>
               </div>
-              <div class="pc-desc" id="dm-delivery-desc">Delivered to your door</div>
+              <div class="pc-desc" id="dm-door-desc">Delivered to your door</div>
             </div>
             <div class="pay-card" id="dm-pickup" onclick="selectDelivery('pickup')">
               <div class="pc-check">✓</div>
@@ -2419,17 +2431,32 @@ footer > *{position:relative;z-index:1}
             </div>
           </div>
 
-          <!-- Address fields (hidden when pickup selected) -->
-          <div id="deliveryAddressFields">
+          <!-- Locker picker (shown when Locker selected) -->
+          <div id="lockerPickerFields">
+            <div class="ck-field" id="field-locker">
+              <label>Search for a nearby locker *</label>
+              <input type="text" id="ck-locker-search" placeholder="e.g. your suburb or town" oninput="onLockerSearchInput()" autocomplete="off">
+              <span class="err-msg">Please choose a locker</span>
+            </div>
+            <div id="lockerResults" style="max-height:220px;overflow-y:auto;margin-top:8px"></div>
+            <div id="lockerSelectedBox" style="display:none;margin-top:10px;padding:12px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:10px;font-size:13px;color:#166534;line-height:1.6">
+              <strong id="lockerSelectedName"></strong><br>
+              <span id="lockerSelectedAddress"></span><br>
+              <button type="button" style="margin-top:8px;padding:4px 10px;font-size:12px;border:1px solid #86efac;background:#fff;border-radius:6px;cursor:pointer;color:#166534" onclick="clearLockerSelection()">Change locker</button>
+            </div>
+          </div>
+
+          <!-- Address fields (shown when Door selected) -->
+          <div id="deliveryAddressFields" style="display:none">
           <div class="ck-field" id="field-street">
             <label>Street Address *</label>
-            <input type="text" id="ck-street" name="address-line1" autocomplete="section-shipping address-line1" placeholder="123 Street Name, Suburb" oninput="clearErr('field-street')">
+            <input type="text" id="ck-street" name="address-line1" autocomplete="section-shipping address-line1" placeholder="123 Street Name, Suburb" oninput="clearErr('field-street')" onblur="resolveShippingRate()">
             <span class="err-msg">Please enter your street address</span>
           </div>
           <div class="ck-row">
             <div class="ck-field" id="field-city">
               <label>City *</label>
-              <input type="text" id="ck-city" name="city" autocomplete="section-shipping address-level2" placeholder="e.g. Cape Town" oninput="clearErr('field-city')">
+              <input type="text" id="ck-city" name="city" autocomplete="section-shipping address-level2" placeholder="e.g. Cape Town" oninput="clearErr('field-city')" onblur="resolveShippingRate()">
               <span class="err-msg">Please enter your city</span>
             </div>
             <div class="ck-field">
@@ -2440,7 +2467,7 @@ footer > *{position:relative;z-index:1}
           <div class="ck-row">
             <div class="ck-field">
               <label>State / Province / Region</label>
-              <input type="text" id="ck-province" name="state" autocomplete="section-shipping address-level1" placeholder="e.g. Western Cape">
+              <input type="text" id="ck-province" name="state" autocomplete="section-shipping address-level1" placeholder="e.g. Western Cape" onblur="resolveShippingRate()">
             </div>
             <div class="ck-field">
               <label>Country</label>
@@ -3728,20 +3755,132 @@ footer > *{position:relative;z-index:1}
     } else {
       if (delivSection) delivSection.style.display = '';
       if (digitalNotice) digitalNotice.style.display = 'none';
-      if (currentDelivery === 'digital') currentDelivery = 'delivery';
-      selectDelivery(currentDelivery === 'pickup' ? 'pickup' : 'delivery');
+      applyOversizeGate();
+      var oversize = hasOversizeInCart();
+      if (currentDelivery === 'digital' || (currentDelivery === 'locker' && oversize)) currentDelivery = oversize ? 'door' : 'locker';
+      selectDelivery(currentDelivery);
     }
   }
 
   // ── Checkout ────────────────────────────────────────────────────────────
   var lastOrder = null;
 
-  var currentDelivery = 'delivery'; // 'delivery' or 'pickup'
+  var currentDelivery = 'locker'; // 'locker' | 'door' | 'pickup' (Bob Go locker-to-locker is the cheapest default)
+  var selectedLocker = null;      // {id,name,address,suburb,city,province,hours}
+  var resolvedShippingRate = null; // live Bob Go rate once locker chosen / address entered; null = not resolved yet
+  var shippingResolving = false;
 
-    function getShipping() {
-    if (isDigitalOnly()) return 0;
-    return currentDelivery === 'pickup' ? 0 : parseFloat(S.shippingFee || 80);
+  // A cart item is oversize if its product is flagged too-large-for-a-locker
+  // in admin (products.oversize) — hides the Locker option, door/pickup only.
+  function hasOversizeInCart() {
+    return cart.some(function(x) {
+      if (x.kind === 'pattern') return false;
+      var prod = DATA.products.find(function(p){ return p.id === x.id; });
+      return prod && !!prod.oversize;
+    });
   }
+
+  function applyOversizeGate() {
+    var oversize = hasOversizeInCart();
+    var notice = document.getElementById('oversizeNotice');
+    var lockerCard = document.getElementById('dm-locker');
+    if (notice) notice.style.display = oversize ? 'block' : 'none';
+    if (lockerCard) lockerCard.style.display = oversize ? 'none' : '';
+  }
+
+  function getShipping() {
+    if (isDigitalOnly()) return 0;
+    if (currentDelivery === 'pickup') return 0;
+    // Live Bob Go rate once resolved; flat fallback so totals never look
+    // blank before the customer has picked a locker / entered an address.
+    return resolvedShippingRate != null ? resolvedShippingRate : parseFloat(S.shippingFee || 80);
+  }
+
+  // Resolves the live Bob Go rate for the current locker/door selection.
+  // Shipping MUST resolve before /api/pay/init (handoff §6/Task 4) — this is
+  // what makes that possible; confirmAndPlace() checks resolvedShippingRate
+  // before submitting.
+  window.resolveShippingRate = async function() {
+    if (isDigitalOnly() || currentDelivery === 'pickup') { resolvedShippingRate = null; renderCheckout(); return; }
+    var dest = currentDelivery === 'locker'
+      ? (selectedLocker ? selectedLocker.id : '')
+      : [document.getElementById('ck-street').value, document.getElementById('ck-city').value, document.getElementById('ck-province').value].filter(Boolean).join(', ').trim();
+    if (!dest) { resolvedShippingRate = null; renderCheckout(); return; }
+
+    shippingResolving = true;
+    renderCheckout();
+    var apiBase = (window.VC_CONFIG && window.VC_CONFIG.WORKER_BASE_URL) || '';
+    try {
+      var url = apiBase + '/api/ship/rate?method=' + currentDelivery + '&dest=' + encodeURIComponent(dest) + '&oversize=' + (hasOversizeInCart() ? 'true' : 'false');
+      var res = await fetch(url);
+      var data = await res.json();
+      resolvedShippingRate = data.ok ? data.rate : null;
+      if (!data.ok) showToast(data.error || 'Could not get a shipping rate');
+    } catch (e) {
+      resolvedShippingRate = null;
+    }
+    shippingResolving = false;
+    renderCheckout();
+  };
+
+  // ── Locker picker ─────────────────────────────────────────────────────
+  var lockerSearchTimer = null;
+  var lastLockerResults = [];
+
+  window.onLockerSearchInput = function() {
+    clearTimeout(lockerSearchTimer);
+    lockerSearchTimer = setTimeout(searchLockers, 350);
+  };
+
+  async function searchLockers() {
+    var q = document.getElementById('ck-locker-search').value.trim();
+    var apiBase = (window.VC_CONFIG && window.VC_CONFIG.WORKER_BASE_URL) || '';
+    try {
+      var res = await fetch(apiBase + '/api/ship/lockers?near=' + encodeURIComponent(q));
+      var data = await res.json();
+      renderLockerResults(data.ok ? data.lockers : []);
+    } catch (e) {
+      renderLockerResults([]);
+    }
+  }
+
+  function renderLockerResults(lockers) {
+    lastLockerResults = lockers;
+    var el = document.getElementById('lockerResults');
+    if (!el) return;
+    if (!lockers.length) {
+      el.innerHTML = '<div style="font-size:12px;color:var(--tl);padding:8px 0">No lockers found — try a different suburb or town.</div>';
+      return;
+    }
+    el.innerHTML = lockers.map(function(l, i) {
+      return '<div class="locker-result" onclick="selectLockerByIndex(' + i + ')" style="padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:13px">' +
+        '<strong>' + l.name + '</strong><br><span style="color:var(--tl);font-size:12px">' + l.address + ' · ' + l.hours + '</span></div>';
+    }).join('');
+  }
+
+  window.selectLockerByIndex = function(i) {
+    var locker = lastLockerResults[i];
+    if (!locker) return;
+    selectedLocker = locker;
+    document.getElementById('lockerResults').innerHTML = '';
+    document.getElementById('ck-locker-search').value = '';
+    clearErr('field-locker');
+    var box = document.getElementById('lockerSelectedBox');
+    if (box) box.style.display = 'block';
+    var nameEl = document.getElementById('lockerSelectedName');
+    var addrEl = document.getElementById('lockerSelectedAddress');
+    if (nameEl) nameEl.textContent = locker.name;
+    if (addrEl) addrEl.textContent = locker.address + ' · ' + locker.hours;
+    resolveShippingRate();
+  };
+
+  window.clearLockerSelection = function() {
+    selectedLocker = null;
+    resolvedShippingRate = null;
+    var box = document.getElementById('lockerSelectedBox');
+    if (box) box.style.display = 'none';
+    renderCheckout();
+  };
 
   function getCheckoutNotes() {
     if (isDigitalOnly()) return ((document.getElementById('ck-notes-digital')||{}).value || '').trim();
@@ -3809,28 +3948,31 @@ footer > *{position:relative;z-index:1}
   }
 
   window.selectDelivery = function(type) {
+    if (type === 'locker' && hasOversizeInCart()) type = 'door'; // gated — shouldn't normally happen, belt-and-braces
     currentDelivery = type;
     // Toggle card active state
-    ['delivery','pickup'].forEach(function(m) {
+    ['locker','door','pickup'].forEach(function(m) {
       var el = document.getElementById('dm-' + m);
       if (el) el.classList.toggle('active', m === type);
     });
-    // Show/hide address fields
-    var addrFields = document.getElementById('deliveryAddressFields');
-    var pickupBox  = document.getElementById('pickupInfoBox');
-    var streetField = document.getElementById('field-street');
-    if (addrFields) addrFields.style.display = type === 'pickup' ? 'none' : 'block';
-    if (pickupBox)  pickupBox.style.display  = type === 'pickup' ? 'block' : 'none';
-    // Street/city validation only required for delivery
+    // Show/hide the three method-specific field blocks
+    var lockerFields = document.getElementById('lockerPickerFields');
+    var addrFields   = document.getElementById('deliveryAddressFields');
+    var pickupBox    = document.getElementById('pickupInfoBox');
+    var streetField  = document.getElementById('field-street');
+    if (lockerFields) lockerFields.style.display = type === 'locker' ? 'block' : 'none';
+    if (addrFields)   addrFields.style.display   = type === 'door'   ? 'block' : 'none';
+    if (pickupBox)     pickupBox.style.display   = type === 'pickup' ? 'block' : 'none';
+    // Street/city validation only required for door delivery
     if (streetField) {
       var inp = document.getElementById('ck-street');
-      if (inp) inp.required = type === 'delivery';
+      if (inp) inp.required = type === 'door';
     }
-    // Update the delivery desc to show cost
-    var cur = S.currency || 'R';
-    var ship = parseFloat(S.shippingFee || 80);
-    var descEl = document.getElementById('dm-delivery-desc');
-    if (descEl) descEl.textContent = 'Delivered to your door — ' + cur + ship.toFixed(2);
+    // A shipping rate only carries over between locker<->locker or door<->door;
+    // switching method invalidates whatever was previously resolved.
+    resolvedShippingRate = null;
+    if (type === 'door') resolveShippingRate();
+    else if (type === 'locker' && selectedLocker) resolveShippingRate();
     // Refresh totals
     renderCheckout();
   };
@@ -3845,7 +3987,12 @@ footer > *{position:relative;z-index:1}
 
     document.getElementById('ckSubtotal').textContent = cur + subtotal.toFixed(2);
     var shipEl = document.getElementById('ckShipping');
-    shipEl.textContent = isDigitalOnly() ? '—' : (ship === 0 ? 'Free (Collection)' : cur + ship.toFixed(2));
+    var needsResolvedRate = !isDigitalOnly() && currentDelivery !== 'pickup';
+    shipEl.textContent = isDigitalOnly() ? '—'
+      : (ship === 0 ? 'Free (Collection)'
+        : (needsResolvedRate && shippingResolving) ? 'Getting rate…'
+        : (needsResolvedRate && resolvedShippingRate == null) ? (currentDelivery === 'locker' ? 'Choose a locker' : 'Enter your address')
+        : cur + ship.toFixed(2));
 
     var discWrap = document.getElementById('ckDiscountWrap');
     if (discWrap) {
@@ -3902,14 +4049,24 @@ footer > *{position:relative;z-index:1}
     if (!name || name === ' ')  { ckFieldErr('field-name','Please enter your first name'); ok=false; }
     if (!phone && !isDigitalOnly()) { ckFieldErr('field-phone','Please enter your phone number'); ok=false; }
     if (!email || email.indexOf('@')===-1) { ckFieldErr('field-email','Please enter a valid email'); ok=false; }
-    // Only validate address for home delivery
-    if (currentDelivery === 'delivery') {
+    if (!isDigitalOnly() && currentDelivery === 'door') {
       var street = document.getElementById('ck-street').value.trim();
       var city   = document.getElementById('ck-city').value.trim();
       if (!street) { ckFieldErr('field-street','Please enter your street address'); ok=false; }
       if (!city)   { ckFieldErr('field-city','Please enter your city'); ok=false; }
     }
+    if (!isDigitalOnly() && currentDelivery === 'locker' && !selectedLocker) {
+      ckFieldErr('field-locker','Please choose a locker');
+      ok = false;
+    }
     if (!ok) { showToast('Please fill in all required fields'); return; }
+    // Shipping must resolve to a live rate before the order can be signed
+    // (handoff §6/Task 4) — locker/door both need a confirmed Bob Go rate.
+    if (!isDigitalOnly() && currentDelivery !== 'pickup' && resolvedShippingRate == null) {
+      showToast(shippingResolving ? 'Still getting your shipping rate — one moment...' : 'Please wait for a shipping rate before continuing');
+      resolveShippingRate();
+      return;
+    }
 
     // Build review summary
     var cur      = S.currency || 'R';
@@ -3927,7 +4084,9 @@ footer > *{position:relative;z-index:1}
       ? 'Digital download — no delivery'
       : (currentDelivery === 'pickup'
           ? 'Collection from ' + window.BIZ_LOC.suburbCity + ' (Free)'
-          : 'Home Delivery — ' + cur + ship.toFixed(2));
+          : currentDelivery === 'locker'
+            ? 'Locker — ' + (selectedLocker ? selectedLocker.name : '') + ' — ' + cur + ship.toFixed(2)
+            : 'Door Delivery — ' + cur + ship.toFixed(2));
 
     var itemRows = cart.map(function(x) {
       return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">' +
@@ -3955,9 +4114,11 @@ footer > *{position:relative;z-index:1}
         reviewRow('Email', email) +
         (isDigitalOnly()
           ? reviewRow('Delivery', 'Digital download — no delivery')
-          : (currentDelivery === 'delivery'
+          : currentDelivery === 'door'
             ? reviewRow('Address', [street, city, province].filter(Boolean).join(', '))
-            : reviewRow('Collection', window.BIZ_LOC.suburbCity + ' — exact address via WhatsApp'))) +
+            : currentDelivery === 'locker'
+              ? reviewRow('Locker', (selectedLocker ? selectedLocker.name + ' — ' + selectedLocker.address : ''))
+              : reviewRow('Collection', window.BIZ_LOC.suburbCity + ' — exact address via WhatsApp')) +
       '</div>' +
       // Items
       '<div style="font-size:11px;font-weight:700;color:var(--skyd);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px">Items</div>' +
@@ -4026,7 +4187,12 @@ footer > *{position:relative;z-index:1}
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customer: { firstName: firstName, lastName: lastName, email: email, phone: phone },
-          delivery: { type: deliveryType === 'pickup' ? 'pickup' : 'delivery', street: street, city: city, province: province, postalCode: postal, country: country },
+          delivery: {
+            type: deliveryType,
+            lockerId: selectedLocker ? selectedLocker.id : null,
+            lockerName: selectedLocker ? selectedLocker.name : null,
+            street: street, city: city, province: province, postalCode: postal, country: country
+          },
           notes: notes,
           items: savedItems.map(function(x){ return { kind: x.kind, id: x.id, size: x.size, color: x.color, qty: x.qty }; }),
           accessToken: accessToken
@@ -4051,7 +4217,9 @@ footer > *{position:relative;z-index:1}
       ? 'Digital download — no delivery'
       : (deliveryType === 'pickup'
           ? 'Collection — ' + window.BIZ_LOC.suburbCity + ' (exact address via WhatsApp)'
-          : [street, city, province].filter(Boolean).join(', '));
+          : deliveryType === 'locker'
+            ? (selectedLocker ? selectedLocker.name + ' — ' + selectedLocker.address : 'PUDO Locker')
+            : [street, city, province].filter(Boolean).join(', '));
 
     lastOrder = {
       orderNum:     data.orderNumber,
@@ -5470,6 +5638,7 @@ footer > *{position:relative;z-index:1}
       colors: r.colors || [],
       badge: r.badge,
       active: r.active,
+      oversize: !!r.oversize,
       images: r.images || [],
       sortOrder: r.sort_order || 0
     };

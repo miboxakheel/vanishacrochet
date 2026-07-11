@@ -15,14 +15,21 @@
 // exists) — because a payment total has to be right regardless. See the
 // build summary for the one-line client-side fix this implies.
 
-export function computeOrderTotals({ cartLines, products, patterns, promotions, settings, deliveryType, isDigitalOnlyOverride }) {
+// NOTE on shipping: this function only computes cart/promo math (subtotal,
+// discount, whether the order is digital-only, whether it contains an
+// oversize item). Shipping is resolved separately in init.js via bobgo.js —
+// getting a Bob Go rate is an async network call, so it doesn't belong in
+// this otherwise-synchronous pure computation. See computeShipping() below
+// for the (synchronous, flat-fee) fallback path only.
+export function computeOrderTotals({ cartLines, products, patterns, promotions, settings, isDigitalOnlyOverride }) {
   const lineItems = [];
   let subtotal = 0;
   let hasPhysical = false;
+  let hasOversizeItem = false;
 
   for (const line of cartLines) {
     const qty = Math.max(1, parseInt(line.qty, 10) || 1);
-    let row, unitPrice, name, kind, promotionIds;
+    let row, unitPrice, name, kind;
 
     if (line.kind === 'pattern') {
       row = patterns.find(p => String(p.local_id) === String(line.id));
@@ -31,7 +38,6 @@ export function computeOrderTotals({ cartLines, products, patterns, promotions, 
       unitPrice = Number(row.price) || 0;
       name = data.name || 'Pattern';
       kind = 'pattern';
-      promotionIds = [];
     } else {
       row = products.find(p => String(p.local_id) === String(line.id));
       if (!row || row.active === false) throw new Error('Unknown or inactive product in cart: ' + line.id);
@@ -39,7 +45,7 @@ export function computeOrderTotals({ cartLines, products, patterns, promotions, 
       name = row.name;
       kind = 'product';
       hasPhysical = true;
-      promotionIds = [row.local_id]; // used below to test promo.productIds membership
+      if (row.oversize) hasOversizeItem = true;
     }
 
     subtotal += unitPrice * qty;
@@ -89,10 +95,20 @@ export function computeOrderTotals({ cartLines, products, patterns, promotions, 
     }
   });
 
-  // ── Shipping — flat fee only (locker/door live-rate picker is Task 4, not built yet) ──
-  const shipping = isDigitalOnly ? 0 : (deliveryType === 'pickup' ? 0 : Number((settings || {}).shippingFee != null ? settings.shippingFee : 80));
+  return { lineItems, subtotal, discount, discountLines, isDigitalOnly, hasOversizeItem };
+}
 
-  const total = Math.max(0, Math.round((subtotal - discount + shipping) * 100) / 100);
+// Combines cart totals with a resolved shipping fee (from resolveShipping()
+// in init.js — a live Bob Go rate for locker/door, 0 for pickup/digital, or
+// the flat settings.shippingFee fallback) into the final signed total.
+export function applyShipping(cartTotals, shipping) {
+  const total = Math.max(0, Math.round((cartTotals.subtotal - cartTotals.discount + shipping) * 100) / 100);
+  return Object.assign({}, cartTotals, { shipping, total });
+}
 
-  return { lineItems, subtotal, discount, discountLines, shipping, total, isDigitalOnly };
+// Synchronous flat-fee fallback — used only when a live Bob Go rate couldn't
+// be resolved (network/API failure), or for the 'pickup' case. NOT used for
+// the normal locker/door path, which goes through bobgo.js's fetchRate().
+export function flatFallbackShipping(settings) {
+  return Number((settings || {}).shippingFee != null ? settings.shippingFee : 80);
 }

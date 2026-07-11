@@ -1,11 +1,14 @@
 // POST /api/pay/init
-// Body: { customer:{firstName,lastName,email,phone}, delivery:{type,street,city,province,postalCode,country},
+// Body: { customer:{firstName,lastName,email,phone},
+//         delivery:{type:'pickup'|'locker'|'door', lockerId, street,city,province,postalCode,country},
 //         notes, items:[{kind,id,size,color,qty}], accessToken }
 // Recomputes the order total from Supabase (never trusts the client's numbers),
-// creates the order server-side, then either returns a MOCK_MODE fake-success
-// payload or a real Paystack authorization_url to redirect the browser to.
+// resolves shipping (Bob Go live rate for locker/door, 0 for pickup), creates
+// the order server-side, then either returns a MOCK_MODE fake-success payload
+// or a real Paystack authorization_url to redirect the browser to.
 import { sbSelect, sbInsert, sbUpsert, sbGetUserFromToken } from '../../_lib/supabase.js';
-import { computeOrderTotals } from '../../_lib/pricing.js';
+import { computeOrderTotals, applyShipping, flatFallbackShipping } from '../../_lib/pricing.js';
+import { fetchRate } from '../../_lib/bobgo.js';
 import { paystackInitialize } from '../../_lib/paystack.js';
 
 function json(data, status) {
@@ -39,8 +42,11 @@ export async function onRequestPost({ request, env }) {
   if (!items.length) return json({ ok: false, error: 'Basket is empty' }, 400);
   if (!customer.email || customer.email.indexOf('@') === -1) return json({ ok: false, error: 'Valid email required' }, 400);
   if (!customer.firstName) return json({ ok: false, error: 'Name required' }, 400);
-  if (delivery.type === 'delivery' && (!delivery.street || !delivery.city)) {
-    return json({ ok: false, error: 'Street and city required for delivery' }, 400);
+  if (delivery.type === 'door' && (!delivery.street || !delivery.city)) {
+    return json({ ok: false, error: 'Street and city required for door delivery' }, 400);
+  }
+  if (delivery.type === 'locker' && !delivery.lockerId) {
+    return json({ ok: false, error: 'Please choose a locker' }, 400);
   }
 
   try {
@@ -63,14 +69,37 @@ export async function onRequestPost({ request, env }) {
       return json({ ok: false, error: 'Please sign in to check out a basket containing patterns' }, 401);
     }
 
-    const totals = computeOrderTotals({
+    const cartTotals = computeOrderTotals({
       cartLines: items,
       products: productsRes,
       patterns: patternsRes,
       promotions: promotionsRes,
-      settings,
-      deliveryType: delivery.type
+      settings
     });
+
+    // ── Resolve shipping — Bob Go's live rate for locker/door, authoritative
+    // and re-derived server-side (never trust a client-submitted rate),
+    // matching the same "never trust client" principle as pricing above.
+    // Shipping MUST resolve before the total is signed (handoff §6/Task 4).
+    let shipping = 0;
+    let lockerDetails = null;
+    if (!cartTotals.isDigitalOnly && delivery.type !== 'pickup') {
+      const dest = delivery.type === 'locker' ? delivery.lockerId : [delivery.street, delivery.city, delivery.province].filter(Boolean).join(', ');
+      try {
+        const rateResult = await fetchRate(env, { method: delivery.type, dest, oversize: cartTotals.hasOversizeItem });
+        if (!rateResult.ok) {
+          return json({ ok: false, error: rateResult.error || 'Could not get a shipping rate' }, 400);
+        }
+        shipping = rateResult.rate;
+        if (delivery.type === 'locker') lockerDetails = delivery.lockerName ? `PUDO Locker: ${delivery.lockerName} (${delivery.lockerId})` : `PUDO Locker: ${delivery.lockerId}`;
+      } catch (err) {
+        // Bob Go network/API failure (not the customer's fault) — fall back
+        // to the flat rate rather than blocking the sale entirely.
+        console.warn('[pay/init] Bob Go rate fetch failed, using flat fallback:', err && err.message);
+        shipping = flatFallbackShipping(settings);
+      }
+    }
+    const totals = applyShipping(cartTotals, shipping);
 
     const orderNumber = generateOrderNum();
     const currency = env.CURRENCY || settings.currency || 'R';
@@ -84,8 +113,11 @@ export async function onRequestPost({ request, env }) {
       last_name: customer.lastName || '',
       email: customer.email,
       mobile: customer.phone || '',
-      address_line1: totals.isDigitalOnly ? '' : (delivery.street || ''),
-      city: totals.isDigitalOnly ? '' : (delivery.city || ''),
+      // orders has no delivery-method column — for locker orders the locker's
+      // name/id is encoded into address_line1 so it reads naturally in the
+      // admin order view (city/province/postal left blank for locker orders).
+      address_line1: totals.isDigitalOnly ? '' : (delivery.type === 'locker' ? lockerDetails : (delivery.street || '')),
+      city: totals.isDigitalOnly || delivery.type === 'locker' ? '' : (delivery.city || ''),
       province: delivery.province || '',
       postal_code: delivery.postalCode || '',
       country: delivery.country || '',
