@@ -27,11 +27,11 @@ BOBGO_ENV = "sandbox"                       # "sandbox" or "production" — whic
 # need this to compute a real "collection_address". PLACEHOLDER — real rates
 # will be wrong/meaningless until these are filled in. (Irrelevant only if
 # MOCK_DELIVERY is ever flipped back to "true".)
-SHIP_FROM_STREET = ""
-SHIP_FROM_SUBURB = ""
-SHIP_FROM_CITY = ""
-SHIP_FROM_PROVINCE = ""
-SHIP_FROM_POSTAL = ""
+SHIP_FROM_STREET = "12 Tulip Place"
+SHIP_FROM_SUBURB = "Springfield"
+SHIP_FROM_CITY = "Durban"
+SHIP_FROM_PROVINCE = "KwaZulu Natal"
+SHIP_FROM_POSTAL = "4091"
 SHIP_FROM_COUNTRY = "ZA"
 
 # ── SECRETS — do NOT add these here. Create with:
