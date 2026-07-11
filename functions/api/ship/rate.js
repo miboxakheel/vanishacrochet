@@ -18,13 +18,15 @@ export async function onRequestGet({ request, env }) {
   const method = url.searchParams.get('method');
   const dest = url.searchParams.get('dest');
   const oversize = url.searchParams.get('oversize') === 'true';
+  const destCity = url.searchParams.get('destCity') || '';
+  const destProvince = url.searchParams.get('destProvince') || '';
 
   if (method !== 'locker' && method !== 'door') {
     return json({ ok: false, error: 'method must be "locker" or "door"' }, 400);
   }
 
   try {
-    const result = await fetchRate(env, { method, dest, oversize });
+    const result = await fetchRate(env, { method, dest, oversize, destCity, destProvince });
     return json(result, result.ok ? 200 : 400);
   } catch (err) {
     console.error('[ship/rate] error:', err && err.message);

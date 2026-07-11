@@ -3812,6 +3812,9 @@ footer > *{position:relative;z-index:1}
     var apiBase = (window.VC_CONFIG && window.VC_CONFIG.WORKER_BASE_URL) || '';
     try {
       var url = apiBase + '/api/ship/rate?method=' + currentDelivery + '&dest=' + encodeURIComponent(dest) + '&oversize=' + (hasOversizeInCart() ? 'true' : 'false');
+      if (currentDelivery === 'locker' && selectedLocker) {
+        url += '&destCity=' + encodeURIComponent(selectedLocker.city || '') + '&destProvince=' + encodeURIComponent(selectedLocker.province || '');
+      }
       var res = await fetch(url);
       var data = await res.json();
       resolvedShippingRate = data.ok ? data.rate : null;
@@ -4191,6 +4194,8 @@ footer > *{position:relative;z-index:1}
             type: deliveryType,
             lockerId: selectedLocker ? selectedLocker.id : null,
             lockerName: selectedLocker ? selectedLocker.name : null,
+            lockerCity: selectedLocker ? selectedLocker.city : null,
+            lockerProvince: selectedLocker ? selectedLocker.province : null,
             street: street, city: city, province: province, postalCode: postal, country: country
           },
           notes: notes,
