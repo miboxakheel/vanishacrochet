@@ -18,12 +18,6 @@ VANISHA_NOTIFY_EMAIL = ""                   # PASTE Vanisha's real inbox once kn
 SUPABASE_URL = "https://zcmabrdkrpgkzoclqozv.supabase.co"
 SUPABASE_ANON_KEY = "sb_publishable_w76G1WtEC-FlwzgDqOIabg_F-uuD-RQ"  # public/publishable key — same one already in vanisha-crochet.html, not a secret
 
-# ── Cloudflare Email Workers send binding — lets functions/_lib/sendEmail.js
-# call env.SEB.send(...). Requires Email Routing to be enabled on the zone
-# once a real domain is attached (see handoff §6, business email section).
-[[send_email]]
-name = "SEB"
-
 # ── SECRETS — do NOT add these here. Create with:
 #      wrangler pages secret put PAYSTACK_SECRET_KEY
 #      wrangler pages secret put SUPABASE_SERVICE_ROLE_KEY
