@@ -211,7 +211,10 @@ async function createRateRequest(env, { deliveryAddress, pickupPointLocationId, 
     },
     body: JSON.stringify(body)
   });
-  if (!res.ok) throw new Error('Bob Go rate request failed: ' + res.status);
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Bob Go rate request failed: ${res.status} ${detail}`);
+  }
   return res.json(); // { id, provider_rate_requests: [...] }
 }
 
