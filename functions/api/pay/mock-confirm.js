@@ -31,7 +31,10 @@ export async function onRequestPost({ request, env }) {
   try {
     const result = await markOrderConfirmedAndNotify(env, body.reference);
     if (!result.ok) return json(result, 404);
-    return json({ ok: true, status: result.order.status });
+    // `won` distinguishes "this call confirmed + emailed" from "already
+    // confirmed by another path, so this call did nothing and sent no email".
+    // Either way the order is now confirmed, so both are a 200 for the client.
+    return json({ ok: true, status: result.order.status, won: !!result.won });
   } catch (err) {
     console.error('[pay/mock-confirm] error:', err && err.message);
     return json({ ok: false, error: err && err.message || 'Server error' }, 500);

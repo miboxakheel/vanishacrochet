@@ -34,7 +34,16 @@ export async function onRequestPost({ request, env }) {
 
   try {
     const result = await markOrderConfirmedAndNotify(env, reference);
-    if (!result.ok) console.warn('[webhook] could not confirm order', reference, result.error);
+    // Three outcomes: won the claim (we confirmed + emailed), lost it (another
+    // path — verify fallback, a retry, the mock button — already confirmed, so
+    // we did nothing and sent no email), or the order wasn't found.
+    if (!result.ok) {
+      console.warn('[webhook] could not confirm order', reference, result.error);
+    } else if (result.won) {
+      console.log('[webhook] confirmed + emailed', reference);
+    } else {
+      console.log('[webhook] already confirmed by another path — no email sent', reference);
+    }
     return new Response('ok', { status: 200 });
   } catch (err) {
     console.error('[webhook] processing error for', reference, err && err.message);

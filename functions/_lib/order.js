@@ -15,26 +15,42 @@ import { buildCustomerEmail, buildVanishaEmail } from './orderEmail.js';
 // unrecognised by every status branch in that UI. Using 'confirmed' here
 // instead, to match the dashboard that already exists.
 export async function markOrderConfirmedAndNotify(env, orderNumber) {
+  // Atomic claim-and-confirm. A single conditional PATCH flips the row from
+  // pending -> confirmed *only if it is still pending*, and returns the full
+  // row + items in the same round trip. Postgres serialises concurrent UPDATEs
+  // on a row, so of the callers that can race here — the Paystack webhook,
+  // /api/pay/verify's fallback, and the MOCK_PAYMENTS button — exactly ONE
+  // sees status still 'pending' and gets a row back; every other caller
+  // matches zero rows. notifyOrder() below runs only for that single winner,
+  // so the customer can never receive two confirmation emails.
+  //
+  // (The `status:'confirmed'` value, not 'paid', matches admin-dashboard.html's
+  // pending -> confirmed -> shipped -> completed lifecycle — see note above.)
+  const claimed = await sbUpdate(
+    env,
+    'orders',
+    `order_number=eq.${encodeURIComponent(orderNumber)}&status=eq.pending&select=*,order_items(*)`,
+    { status: 'confirmed' }
+  );
+
+  if (claimed.length) {
+    // We won the claim — the only path that emails.
+    const order = claimed[0];
+    await notifyOrder(env, order);
+    return { ok: true, won: true, order };
+  }
+
+  // We did not win: the row was already non-pending (someone else confirmed it)
+  // or the order number doesn't exist. One extra read — only on this rare,
+  // deliberately email-free path — tells those two cases apart. notifyOrder()
+  // is intentionally NOT called here.
   const rows = await sbSelect(
     env,
     'orders',
     `order_number=eq.${encodeURIComponent(orderNumber)}&select=*,order_items(*)`
   );
-  const order = rows[0];
-  if (!order) return { ok: false, error: 'order_not_found' };
-
-  if (order.status !== 'pending') {
-    // Idempotent: webhook retries, verify-fallback races, and the mock
-    // button can all land on an already-processed order.
-    return { ok: true, alreadyProcessed: true, order };
-  }
-
-  const updatedRows = await sbUpdate(env, 'orders', `id=eq.${order.id}`, { status: 'confirmed' });
-  const finalOrder = updatedRows[0] || Object.assign({}, order, { status: 'confirmed' });
-  finalOrder.order_items = order.order_items;
-
-  await notifyOrder(env, finalOrder);
-  return { ok: true, order: finalOrder };
+  if (rows.length) return { ok: true, won: false, alreadyProcessed: true, order: rows[0] };
+  return { ok: false, error: 'order_not_found' };
 }
 
 async function notifyOrder(env, order) {

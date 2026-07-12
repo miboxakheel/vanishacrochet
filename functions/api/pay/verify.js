@@ -33,6 +33,11 @@ export async function onRequestGet({ request, env }) {
       try {
         const psData = await paystackVerify(env, reference);
         if (psData.status === 'success') {
+          // This runs only when the webhook hasn't landed yet. The atomic claim
+          // inside decides the race: if we win, it confirms + emails; if the
+          // webhook (or a retry) already won, it returns won:false and sends
+          // nothing. Both give ok:true with the now-confirmed order, so we just
+          // reflect that status to the page — no email logic lives here.
           const result = await markOrderConfirmedAndNotify(env, reference);
           if (result.ok) order = Object.assign({}, order, { status: result.order.status });
         }
