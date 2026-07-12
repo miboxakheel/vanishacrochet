@@ -351,7 +351,13 @@ export async function fetchRate(env, { method, dest, oversize, destCity, destPro
     useCollectionLocker: method === 'locker'
   });
   const resolved = isFullyResolved(created) ? created : await pollRateRequest(env, created.id, 4);
-  if (!resolved) return { ok: false, error: 'Bob Go is taking too long to quote a rate — please try again' };
+  // Unlike the ok:false cases above (bad/missing input — a real error the
+  // customer must fix), this is Bob Go's sandbox being transiently slow —
+  // throw so init.js's existing catch falls back to flat-rate shipping
+  // instead of failing the whole sale over third-party flakiness. The
+  // client-side preview (api/ship/rate) still surfaces this as an error,
+  // which is correct there — no need to fake a preview rate.
+  if (!resolved) throw new Error('Bob Go is taking too long to quote a rate');
 
   const wantType = method === 'locker' ? 'pickup-point' : 'door';
   const best = cheapestForDeliveryType(resolved, wantType);
