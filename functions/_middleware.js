@@ -112,9 +112,12 @@ export async function onRequest(context) {
       status: 200,
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        // Short edge cache so repeated crawler hits don't each read Supabase,
-        // while a newly-uploaded share image still propagates within minutes.
-        'Cache-Control': 'public, max-age=300',
+        // MUST NOT be shared-cached: this response depends on the User-Agent,
+        // but the edge cache keys by URL only — a cached crawler page for "/"
+        // could otherwise be served to a real visitor (or vice versa), showing
+        // everyone the og-only stub instead of the SPA. Crawler hits are rare,
+        // so reading Supabase per crawl is fine.
+        'Cache-Control': 'no-store',
         'X-Robots-Tag': 'all'
       }
     });
