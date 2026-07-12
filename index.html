@@ -2311,7 +2311,7 @@ footer > *{position:relative;z-index:1}
         <span style="color:var(--border)">───</span>
         <span style="color:var(--skyd);font-weight:700">⬤ Review</span>
         <span style="color:var(--border)">───</span>
-        <span>Confirmed</span>
+        <span>Payment</span>
       </div>
 
       <div id="reviewContent"></div>
@@ -2321,10 +2321,10 @@ footer > *{position:relative;z-index:1}
           ← Edit Details
         </button>
         <button onclick="confirmAndPlace()" id="confirmPlaceBtn" style="flex:2;padding:12px;border-radius:28px;border:none;background:var(--skyd);color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:Lato,sans-serif;transition:background .2s">
-          Confirm &amp; Place Order
+          Proceed to Payment
         </button>
       </div>
-      <p style="text-align:center;font-size:11px;color:var(--tl);margin-top:10px">🔒 Your details are secure</p>
+      <p style="text-align:center;font-size:11px;color:var(--tl);margin-top:10px">🔒 Your details are secure — you'll pay on Paystack's secure page next</p>
     </div>
   </div>
 </div>
@@ -2390,7 +2390,7 @@ footer > *{position:relative;z-index:1}
           </div>
           <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px 16px;font-size:13px;color:#166534;line-height:1.75">
             <strong>No delivery needed — these are digital patterns.</strong><br>
-            Once your payment is confirmed, each pattern becomes available to download under <strong>My Patterns</strong>. Digital orders are paid via <strong>Pay Now</strong>.
+            Once your payment is confirmed, each pattern becomes available to download under <strong>My Patterns</strong>. Digital orders are paid securely via <strong>Paystack</strong>.
           </div>
           <div class="ck-field" style="margin-top:14px">
             <label>Notes <span style="font-size:10px;color:var(--tl);font-weight:400;text-transform:none">(optional)</span></label>
@@ -2521,10 +2521,10 @@ footer > *{position:relative;z-index:1}
           <div class="pay-info-box paynow-box" id="info-paystack">
             <strong style="color:var(--skyd)">Secure payment via Paystack</strong>
             <div class="paynow-steps">
-              <div class="paynow-step"><div class="paynow-step-num">1</div><span>Click "Review &amp; Confirm Order" — your order is recorded and an invoice is generated</span></div>
-              <div class="paynow-step"><div class="paynow-step-num">2</div><span>You are redirected to Paystack's secure payment page</span></div>
+              <div class="paynow-step"><div class="paynow-step-num">1</div><span>Click "Review &amp; Confirm Order" to check your order details</span></div>
+              <div class="paynow-step"><div class="paynow-step-num">2</div><span>Click "Proceed to Payment" — your order is recorded and you're redirected to Paystack's secure payment page</span></div>
               <div class="paynow-step"><div class="paynow-step-num">3</div><span>Pay by card or EFT</span></div>
-              <div class="paynow-step"><div class="paynow-step-num">4</div><span>We receive confirmation and begin crafting your order</span></div>
+              <div class="paynow-step"><div class="paynow-step-num">4</div><span>Once payment is confirmed, we email your invoice and begin crafting your order</span></div>
             </div>
             <div class="paynow-methods">
               <span class="paynow-method-badge visa">Visa / Mastercard</span>
@@ -2549,8 +2549,8 @@ footer > *{position:relative;z-index:1}
           <button class="place-order-btn" id="placeOrderBtn" onclick="reviewOrder()" style="margin-top:14px">Review &amp; Confirm Order</button>
           <div class="ck-notes">
             🔒 Your details are secure<br>
-            📄 Invoice downloads automatically<br>
-            📧 Order confirmation sent to your email
+            💳 Payment happens next, on Paystack's secure page<br>
+            📧 Invoice + confirmation emailed once payment is confirmed
           </div>
         </div>
       </div>
@@ -2561,20 +2561,19 @@ footer > *{position:relative;z-index:1}
 <!-- CONFIRM PAGE -->
 <div class="page" id="page-confirm">
   <div class="confirm-page">
-    <div class="confirm-check">✅</div>
-    <h1>Order Received!</h1>
+    <div class="confirm-check" id="confirmCheckIcon">✅</div>
+    <h1 id="confirmHeading">Order Confirmed!</h1>
     <div class="confirm-order-num" id="confirmOrderNum">VC-000000</div>
-    <p class="confirm-sub" id="confirmMsg">Thank you! Your order has been received. We will be in touch via WhatsApp shortly.</p>
+    <p class="confirm-sub" id="confirmMsg">Thank you! Your payment has been received and your order is confirmed.</p>
     <div class="confirm-details" id="confirmDetails"></div>
     <div id="mockPaySimBox" style="display:none;margin:14px 0;padding:14px 16px;background:#fffbeb;border:1px solid #f59e0b;border-radius:10px;font-size:13px;color:#78350f">
       <strong>Test mode:</strong> this order is waiting on a payment. Payments are still in test mode (MOCK_PAYMENTS) — no real Paystack charge — use the button below to simulate the webhook and unlock the order.
       <div style="margin-top:10px"><button class="btn-primary" id="mockPaySimBtn" onclick="simulateMockPayment()">Simulate Payment Success</button></div>
     </div>
     <div class="confirm-actions">
-      <button class="invoice-btn" onclick="downloadInvoice()">📄 Download Invoice (PDF)</button>
+      <button class="invoice-btn" id="downloadInvoiceBtn" onclick="downloadInvoice()" style="display:none">📄 Download Invoice (PDF)</button>
       <button class="btn-primary" onclick="showPage('shop')">Continue Shopping</button>
     </div>
-    <p style="font-size:12px;color:var(--tl);margin-top:18px;line-height:1.7">We will contact you via WhatsApp within a few hours to confirm your colour choices and arrange payment or delivery.</p>
   </div>
 </div>
 
@@ -4290,7 +4289,7 @@ footer > *{position:relative;z-index:1}
 
     if (!data || !data.ok) {
       btn.disabled = false;
-      btn.textContent = 'Confirm & Place Order';
+      btn.textContent = 'Proceed to Payment';
       showToast((data && data.error) || 'Could not place your order — please try again');
       return;
     }
@@ -4329,7 +4328,11 @@ footer > *{position:relative;z-index:1}
       storeName:    S.storeName || 'Vanisha Crochet',
       storeEmail:   S.email || '',
       storeWa:      S.whatsapp || '',
-      logoImage:    S.logoImage || ''
+      logoImage:    S.logoImage || '',
+      // Order exists server-side the moment /api/pay/init succeeds, but that's
+      // NOT the same as paid — invoice download stays gated on this until the
+      // webhook (or the mock-mode simulate button) actually confirms payment.
+      paymentConfirmed: false
     };
 
     cart = [];
@@ -4352,6 +4355,16 @@ footer > *{position:relative;z-index:1}
     document.getElementById('confirmOrderNum').textContent = order.orderNum;
     var hasPattern = (order.items||[]).some(function(x){ return x.kind === 'pattern'; });
     var firstName = (order.name||'').split(' ')[0];
+
+    // Heading, checkmark, and invoice download all reflect whether payment
+    // has ACTUALLY been confirmed yet — not just whether the order exists.
+    var headingEl = document.getElementById('confirmHeading');
+    var iconEl = document.getElementById('confirmCheckIcon');
+    var invoiceBtn = document.getElementById('downloadInvoiceBtn');
+    if (headingEl) headingEl.textContent = awaitingPayment ? 'Almost there — payment pending' : 'Order Confirmed!';
+    if (iconEl) iconEl.textContent = awaitingPayment ? '⏳' : '✅';
+    if (invoiceBtn) invoiceBtn.style.display = awaitingPayment ? 'none' : '';
+
     document.getElementById('confirmMsg').textContent = awaitingPayment
       ? 'Thank you ' + firstName + '! Your order is recorded and waiting on payment confirmation (test mode).'
       : ('Thank you ' + firstName + '! Your payment has been received and your order is confirmed. ' +
@@ -4392,6 +4405,7 @@ footer > *{position:relative;z-index:1}
       });
       var data = await res.json();
       if (data.ok) {
+        lastOrder.paymentConfirmed = true;
         var simBox = document.getElementById('mockPaySimBox');
         if (simBox) simBox.style.display = 'none';
         renderConfirmPage(lastOrder, false);
@@ -4434,10 +4448,19 @@ footer > *{position:relative;z-index:1}
           deliveryType: 'delivery',
           address: '',
           storeName: S.storeName || 'Vanisha Crochet',
-          items: (data.items||[]).map(function(it){ return { name: it.product_name, size: it.size, color: it.color, qty: it.qty, price: it.unit_price }; })
+          items: (data.items||[]).map(function(it){ return { name: it.product_name, size: it.size, color: it.color, qty: it.qty, price: it.unit_price }; }),
+          paymentConfirmed: data.status !== 'pending'
         };
+        var awaitingPayment = data.status === 'pending';
+        var headingEl = document.getElementById('confirmHeading');
+        var iconEl = document.getElementById('confirmCheckIcon');
+        var invoiceBtn = document.getElementById('downloadInvoiceBtn');
+        if (headingEl) headingEl.textContent = awaitingPayment ? 'Almost there — payment pending' : 'Order Confirmed!';
+        if (iconEl) iconEl.textContent = awaitingPayment ? '⏳' : '✅';
+        if (invoiceBtn) invoiceBtn.style.display = awaitingPayment ? 'none' : '';
+
         document.getElementById('confirmOrderNum').textContent = data.orderNumber;
-        document.getElementById('confirmMsg').textContent = data.status === 'pending'
+        document.getElementById('confirmMsg').textContent = awaitingPayment
           ? 'Thank you! Your order is recorded and we\'re still waiting for payment confirmation — refresh in a moment if you\'ve just paid.'
           : 'Thank you! Your payment has been received and your order is confirmed. We\'ll be in touch with any updates.';
         var det = document.getElementById('confirmDetails');
@@ -4455,6 +4478,9 @@ footer > *{position:relative;z-index:1}
   // ── PDF Invoice generation (jsPDF) ───────────────────────────────────────
   window.downloadInvoice = function() {
     if (!lastOrder) { showToast('No order to generate invoice for'); return; }
+    // Belt-and-braces alongside the hidden button — invoices are only for
+    // confirmed (paid) orders, never a still-pending one.
+    if (!lastOrder.paymentConfirmed) { showToast('Invoice will be available once payment is confirmed'); return; }
     loadJsPDF(function() {
       var doc = buildPDF(lastOrder);
       if (doc) {
