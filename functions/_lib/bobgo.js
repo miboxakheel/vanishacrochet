@@ -227,6 +227,19 @@ function hasCollectionLockerConfig(env) {
   return !!(env.SHIP_FROM_LOCKER_ID && env.SHIP_FROM_LOCKER_PROVIDER_SLUG);
 }
 
+// Which collection path a locker quote actually used, so it's verifiable
+// rather than guessed from a rate that looks the same either way:
+//  - 'locker-to-locker'  : true Bob Box collection (collection_pickup_point_
+//                          location_id + provider slug sent). Needs BOTH
+//                          SHIP_FROM_LOCKER_ID and SHIP_FROM_LOCKER_PROVIDER_SLUG.
+//  - 'address-collection': fallback — collected from the SHIP_FROM_* street
+//                          address because one of those two vars is missing.
+// Door quotes are always address-collection.
+function collectionModeFor(env, method) {
+  if (method !== 'locker') return 'address-collection';
+  return hasCollectionLockerConfig(env) ? 'locker-to-locker' : 'address-collection';
+}
+
 async function createRateRequest(env, { deliveryAddress, pickupPointLocationId, sizeTier, useCollectionLocker }) {
   const body = {
     collection_address: originAddress(env),
@@ -316,9 +329,9 @@ export async function fetchRate(env, { method, dest, sizeTier, destCity, destPro
     if (method === 'locker') {
       // Plausible per-tier locker rate (indicative figures from sizes.js).
       const base = SIZE_TIERS[tier].approxLockerRate || 45;
-      return { ok: true, rate: Math.round((base + (h % 5)) * 100) / 100, currency: 'ZAR', service: 'PUDO Bob Box (' + SIZE_TIERS[tier].boxName + ')', etaDays: '1-3' };
+      return { ok: true, rate: Math.round((base + (h % 5)) * 100) / 100, currency: 'ZAR', service: 'PUDO Bob Box (' + SIZE_TIERS[tier].boxName + ')', etaDays: '1-3', collectionMode: 'mock', wouldUse: collectionModeFor(env, method) };
     }
-    return { ok: true, rate: 95 + (h % 46), currency: 'ZAR', service: 'Door-to-Door', etaDays: '2-4' };
+    return { ok: true, rate: 95 + (h % 46), currency: 'ZAR', service: 'Door-to-Door', etaDays: '2-4', collectionMode: 'mock', wouldUse: collectionModeFor(env, method) };
   }
 
   let deliveryAddress, pickupPointLocationId;
@@ -347,6 +360,15 @@ export async function fetchRate(env, { method, dest, sizeTier, destCity, destPro
     deliveryAddress = { street_address: parts[0] || '', local_area: '', city: parts[1] || '', zone: parts[2] || '', code: parts[3] || '', country: 'ZA' };
   }
 
+  // Which collection path this quote takes — logged and returned so it can be
+  // verified directly, not inferred from a rate that looks the same either way.
+  const collectionMode = collectionModeFor(env, method);
+  if (method === 'locker') {
+    console.log('[bobgo] locker quote collectionMode=' + collectionMode +
+      ' (SHIP_FROM_LOCKER_ID=' + (env.SHIP_FROM_LOCKER_ID ? 'set' : 'MISSING') +
+      ', SHIP_FROM_LOCKER_PROVIDER_SLUG=' + (env.SHIP_FROM_LOCKER_PROVIDER_SLUG ? 'set' : 'MISSING') + ')');
+  }
+
   const created = await createRateRequest(env, {
     deliveryAddress, pickupPointLocationId, sizeTier: tier,
     useCollectionLocker: method === 'locker'
@@ -369,7 +391,11 @@ export async function fetchRate(env, { method, dest, sizeTier, destCity, destPro
     rate: best.rate_amount,
     currency: 'ZAR',
     service: (best.service_level && best.service_level.name) || '',
-    etaDays: ''
+    etaDays: '',
+    // Verification fields: which collection path was actually used, and the
+    // config that decides it (booleans only — never the secret values).
+    collectionMode: collectionMode,
+    lockerCollectionConfigured: hasCollectionLockerConfig(env)
   };
 
   // Door only: surface Bob Go's OWN geocoding confidence for the address the

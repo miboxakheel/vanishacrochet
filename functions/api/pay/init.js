@@ -97,7 +97,10 @@ export async function onRequestPost({ request, env }) {
           return json({ ok: false, error: rateResult.error || 'Could not get a shipping rate' }, 400);
         }
         shipping = rateResult.rate;
-        if (delivery.type === 'locker') lockerDetails = delivery.lockerName ? `PUDO Locker: ${delivery.lockerName} (${delivery.lockerId})` : `PUDO Locker: ${delivery.lockerId}`;
+        if (delivery.type === 'locker') {
+          lockerDetails = delivery.lockerName ? `PUDO Locker: ${delivery.lockerName} (${delivery.lockerId})` : `PUDO Locker: ${delivery.lockerId}`;
+          console.log(`[pay/init] locker shipping R${shipping} via ${rateResult.collectionMode} (lockerCollectionConfigured=${rateResult.lockerCollectionConfigured})`);
+        }
       } catch (err) {
         // Bob Go network/API failure (not the customer's fault) — fall back
         // to the flat rate rather than blocking the sale entirely.
