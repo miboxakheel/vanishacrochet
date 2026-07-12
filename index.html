@@ -4424,10 +4424,16 @@ footer > *{position:relative;z-index:1}
     var btn = document.getElementById('mockPaySimBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Simulating...'; }
     var apiBase = (window.VC_CONFIG && window.VC_CONFIG.WORKER_BASE_URL) || '';
+    // Bounded like confirmAndPlace — mock-confirm does two sequential Supabase
+    // round-trips (SA -> eu-west), so a stalled response must not leave the
+    // button spinning on "Simulating..." forever.
+    var simCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var simTimeout = simCtrl ? setTimeout(function(){ simCtrl.abort(); }, 30000) : null;
     try {
       var res = await fetch(apiBase + '/api/pay/mock-confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: simCtrl ? simCtrl.signal : undefined,
         body: JSON.stringify({ reference: lastOrder.orderNum })
       });
       var data = await res.json();
@@ -4439,10 +4445,14 @@ footer > *{position:relative;z-index:1}
         showToast('Payment simulated — confirmation emails would be sent (see the Function logs — MOCK_PAYMENTS)');
       } else {
         showToast(data.error || 'Could not simulate payment');
-        if (btn) { btn.disabled = false; btn.textContent = 'Simulate Payment Success'; }
       }
     } catch (e) {
-      showToast('Could not reach the server');
+      showToast((e && e.name === 'AbortError') ? 'That took too long — it may still have gone through. Refresh to check.' : 'Could not reach the server');
+    } finally {
+      if (simTimeout) clearTimeout(simTimeout);
+      // Always restore the button — on success the box is already hidden so
+      // this is invisible, but it guarantees the button can never stay stuck
+      // on "Simulating..." on any error/timeout path.
       if (btn) { btn.disabled = false; btn.textContent = 'Simulate Payment Success'; }
     }
   };
@@ -6151,13 +6161,16 @@ footer > *{position:relative;z-index:1}
     };
     window.sb.from('profiles').update(updates).eq('id', currentUser.id)
     .then(function(res){
-      btn.disabled = false; btn.textContent = t;
       if(res.error){ toast('Could not save: ' + res.error.message); return; }
       currentProfile = Object.assign(currentProfile || {}, updates);
       window.currentProfile = currentProfile;
       document.getElementById('acctInitials').textContent = initials(currentProfile);
       toast('✓ Your details have been saved');
-    });
+    })
+    // Without this, a rejected update (network drop) left the button stuck on
+    // "Saving…" forever. Reset in finally so it always returns to normal.
+    .catch(function(){ toast('Could not save — please try again'); })
+    .finally(function(){ btn.disabled = false; btn.textContent = t; });
   };
 
   // ── Orders (loaded in Phase 4; placeholder-safe now) ──
