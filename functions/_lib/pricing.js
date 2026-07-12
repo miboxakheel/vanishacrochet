@@ -2,6 +2,7 @@
 // client-side renderCheckout()/calcPromoDiscount()/getShipping() math, but
 // reads prices/promotions fresh from Supabase so a tampered client total can
 // never be trusted (per spec Task 3: "compute/verify total from source data").
+import { largestTier, normalizeTier, DEFAULT_TIER } from './sizes.js';
 //
 // NOTE on promotions: the `products` table has NO promotion-linkage column
 // (confirmed against Supabase_database/step 1.txt — products is fully
@@ -25,7 +26,9 @@ export function computeOrderTotals({ cartLines, products, patterns, promotions, 
   const lineItems = [];
   let subtotal = 0;
   let hasPhysical = false;
-  let hasOversizeItem = false;
+  // Collect the PUDO size tier of every physical line; the parcel is sized to
+  // the largest (everything ships in one box). See functions/_lib/sizes.js.
+  const physicalTiers = [];
 
   for (const line of cartLines) {
     const qty = Math.max(1, parseInt(line.qty, 10) || 1);
@@ -51,6 +54,9 @@ export function computeOrderTotals({ cartLines, products, patterns, promotions, 
       name = (data.name || 'Pattern') + ' — Kit';
       kind = 'kit';
       hasPhysical = true;
+      // Kits (yarn + materials) aren't rows in `products`, so they have no
+      // size_tier of their own — default them to the standard box.
+      physicalTiers.push(DEFAULT_TIER);
     } else {
       row = products.find(p => String(p.local_id) === String(line.id));
       if (!row || row.active === false) throw new Error('Unknown or inactive product in cart: ' + line.id);
@@ -58,7 +64,7 @@ export function computeOrderTotals({ cartLines, products, patterns, promotions, 
       name = row.name;
       kind = 'product';
       hasPhysical = true;
-      if (row.oversize) hasOversizeItem = true;
+      physicalTiers.push(normalizeTier(row.size_tier));
     }
 
     subtotal += unitPrice * qty;
@@ -108,7 +114,10 @@ export function computeOrderTotals({ cartLines, products, patterns, promotions, 
     }
   });
 
-  return { lineItems, subtotal, discount, discountLines, isDigitalOnly, hasOversizeItem };
+  // The whole order ships in one box, sized to the largest item present.
+  const cartSizeTier = largestTier(physicalTiers);
+
+  return { lineItems, subtotal, discount, discountLines, isDigitalOnly, cartSizeTier };
 }
 
 // Combines cart totals with a resolved shipping fee (from resolveShipping()

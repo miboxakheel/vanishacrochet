@@ -31,9 +31,9 @@
 // - Oversized parcels naturally come back with ONLY delivery_type:"door"
 //   responses (tested 100x80x60cm/15kg — zero pickup-point options) — Bob Go
 //   itself enforces locker size limits once real dimensions are submitted.
-//   We still gate on products.oversize explicitly (clearer error message than
-//   silently offering door-only with no explanation), but also submit a
-//   deliberately larger parcel size in that case so the real quote agrees.
+//   We size the parcel per product tier (functions/_lib/sizes.js); if a tier
+//   ever exceeds every locker box, Bob Go simply returns no pickup-point
+//   option and the order falls back to door-only.
 // - No endpoint exposes a pre-configured warehouse/collection address for the
 //   account (checked /accounts) — the store's collection address must be
 //   configured here via env vars (SHIP_FROM_*, see wrangler.toml).
@@ -52,6 +52,8 @@
 //   same Bob Box/pickup-point rate, so that combination doesn't appear to
 //   exist as a real product on this account. Door deliveries stay
 //   address-to-address (unchanged) rather than guessing further.
+
+import { SIZE_TIERS, normalizeTier, parcelForTier } from './sizes.js';
 
 const BOBGO_BASE = {
   sandbox: 'https://api.sandbox.bobgo.co.za/v2',
@@ -217,15 +219,6 @@ function originAddress(env) {
   };
 }
 
-// A modest default box for normal orders; a deliberately oversized one when
-// products.oversize is set, so Bob Go's own size limits agree with our gate
-// (verified: a 100x80x60cm/15kg parcel gets zero pickup-point quotes back).
-function parcelFor(oversize) {
-  return oversize
-    ? [{ submitted_length_cm: 100, submitted_width_cm: 80, submitted_height_cm: 60, submitted_weight_kg: 15 }]
-    : [{ submitted_length_cm: 30, submitted_width_cm: 20, submitted_height_cm: 15, submitted_weight_kg: 1 }];
-}
-
 // Set once Vanisha has chosen her own regular drop-off locker — until then,
 // Locker quotes fall back to address-based collection (SHIP_FROM_*), which
 // returns the same Bob Box pricing anyway since it's sized-based not
@@ -234,11 +227,11 @@ function hasCollectionLockerConfig(env) {
   return !!(env.SHIP_FROM_LOCKER_ID && env.SHIP_FROM_LOCKER_PROVIDER_SLUG);
 }
 
-async function createRateRequest(env, { deliveryAddress, pickupPointLocationId, oversize, useCollectionLocker }) {
+async function createRateRequest(env, { deliveryAddress, pickupPointLocationId, sizeTier, useCollectionLocker }) {
   const body = {
     collection_address: originAddress(env),
     delivery_address: deliveryAddress,
-    parcels: parcelFor(oversize)
+    parcels: parcelForTier(sizeTier)
   };
   if (pickupPointLocationId) body.pickup_point_location_id = pickupPointLocationId;
   if (useCollectionLocker && hasCollectionLockerConfig(env)) {
@@ -302,11 +295,17 @@ function cheapestForDeliveryType(rateRequest, wantType) {
 // destCity/destProvince: optional hints used as the delivery_address for a
 // locker quote (the actual routing comes from pickup_point_location_id, but
 // Bob Go's API still wants a plausible delivery_address on the request).
-// oversize: true if the cart contains a product flagged too large for a
-// locker (products.oversize, Supabase step 13).
-export async function fetchRate(env, { method, dest, oversize, destCity, destProvince }) {
-  if (method === 'locker' && oversize) {
-    return { ok: false, error: 'One or more items in your basket are too large for a PUDO locker — please choose door delivery.' };
+// sizeTier: which PUDO Bob Box the order ships in ('standard'|'medium'|'large',
+// the cart's largest item — see functions/_lib/sizes.js). Determines the
+// parcel dimensions we submit, so the returned rate is that box's real price.
+export async function fetchRate(env, { method, dest, sizeTier, destCity, destProvince }) {
+  const tier = normalizeTier(sizeTier);
+  // A tier can be flagged non-lockerable in sizes.js (e.g. a future production
+  // box bigger than any locker). None of the current S/M/L tiers are, so this
+  // normally never triggers; door-only otherwise falls out naturally when Bob
+  // Go returns no pickup-point box for the submitted parcel.
+  if (method === 'locker' && !SIZE_TIERS[tier].lockerable) {
+    return { ok: false, error: 'This order is too large for a PUDO locker — please choose door delivery.' };
   }
   if (!dest) {
     return { ok: false, error: method === 'locker' ? 'Please choose a locker' : 'Delivery address required' };
@@ -315,7 +314,9 @@ export async function fetchRate(env, { method, dest, oversize, destCity, destPro
   if (env.MOCK_DELIVERY === 'true') {
     const h = hashString(String(dest));
     if (method === 'locker') {
-      return { ok: true, rate: 60 + (h % 16), currency: 'ZAR', service: 'PUDO Locker-to-Locker', etaDays: '1-3' };
+      // Plausible per-tier locker rate (indicative figures from sizes.js).
+      const base = SIZE_TIERS[tier].approxLockerRate || 45;
+      return { ok: true, rate: Math.round((base + (h % 5)) * 100) / 100, currency: 'ZAR', service: 'PUDO Bob Box (' + SIZE_TIERS[tier].boxName + ')', etaDays: '1-3' };
     }
     return { ok: true, rate: 95 + (h % 46), currency: 'ZAR', service: 'Door-to-Door', etaDays: '2-4' };
   }
@@ -347,7 +348,7 @@ export async function fetchRate(env, { method, dest, oversize, destCity, destPro
   }
 
   const created = await createRateRequest(env, {
-    deliveryAddress, pickupPointLocationId, oversize,
+    deliveryAddress, pickupPointLocationId, sizeTier: tier,
     useCollectionLocker: method === 'locker'
   });
   const resolved = isFullyResolved(created) ? created : await pollRateRequest(env, created.id, 4);

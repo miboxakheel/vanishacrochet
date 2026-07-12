@@ -92,7 +92,7 @@ export async function onRequestPost({ request, env }) {
     if (!cartTotals.isDigitalOnly && delivery.type !== 'pickup') {
       const dest = delivery.type === 'locker' ? delivery.lockerId : [delivery.street, delivery.city, delivery.province, delivery.postalCode].filter(Boolean).join(', ');
       try {
-        const rateResult = await fetchRate(env, { method: delivery.type, dest, oversize: cartTotals.hasOversizeItem, destCity: delivery.lockerCity, destProvince: delivery.lockerProvince });
+        const rateResult = await fetchRate(env, { method: delivery.type, dest, sizeTier: cartTotals.cartSizeTier, destCity: delivery.lockerCity, destProvince: delivery.lockerProvince });
         if (!rateResult.ok) {
           return json({ ok: false, error: rateResult.error || 'Could not get a shipping rate' }, 400);
         }

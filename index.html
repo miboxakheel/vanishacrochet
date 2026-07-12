@@ -2406,7 +2406,7 @@ footer > *{position:relative;z-index:1}
           </div>
 
           <div id="oversizeNotice" style="display:none;margin-bottom:14px;padding:12px 14px;background:#fffbeb;border:1px solid #f59e0b;border-radius:10px;font-size:13px;color:#78350f">
-            One or more items in your basket are too large for a PUDO locker — please choose door delivery or collection.
+            This order ships in a larger PUDO box, so the locker rate is a little higher.
           </div>
 
           <!-- Delivery method toggle -->
@@ -3777,9 +3777,10 @@ footer > *{position:relative;z-index:1}
     } else {
       if (delivSection) delivSection.style.display = '';
       if (digitalNotice) digitalNotice.style.display = 'none';
-      applyOversizeGate();
-      var oversize = hasOversizeInCart();
-      if (currentDelivery === 'digital' || (currentDelivery === 'locker' && oversize)) currentDelivery = oversize ? 'door' : 'locker';
+      applyBoxSizeNote();
+      // All box tiers fit a locker, so nothing forces door here — just recover
+      // from a previous digital-only state by defaulting back to the locker.
+      if (currentDelivery === 'digital') currentDelivery = 'locker';
       selectDelivery(currentDelivery);
     }
   }
@@ -3792,22 +3793,44 @@ footer > *{position:relative;z-index:1}
   var resolvedShippingRate = null; // live Bob Go rate once locker chosen / address entered; null = not resolved yet
   var shippingResolving = false;
 
-  // A cart item is oversize if its product is flagged too-large-for-a-locker
-  // in admin (products.oversize) — hides the Locker option, door/pickup only.
-  function hasOversizeInCart() {
-    return cart.some(function(x) {
-      if (x.kind === 'pattern') return false;
-      var prod = DATA.products.find(function(p){ return p.id === x.id; });
-      return prod && !!prod.oversize;
+  // ── PUDO box size tiers (mirrors functions/_lib/sizes.js) ────────────────
+  // The client only needs the ordering (to find the cart's largest tier) and
+  // labels (for the customer note). Authoritative dimensions/rates that price
+  // the box live server-side. Keep this in sync if you change the tiers there.
+  var SIZE_TIER_ORDER  = ['standard', 'medium', 'large'];
+  var SIZE_TIER_LABELS = { standard: 'Standard', medium: 'Medium', large: 'Large' };
+
+  // The largest box tier among the cart's physical items — the whole order
+  // ships in one box sized to the biggest item (mirrors pricing.js). Patterns
+  // are digital and ignored; kits count as 'standard' (same as the server).
+  function cartMaxTier() {
+    var best = -1;
+    cart.forEach(function(x) {
+      if (x.kind === 'pattern') return;
+      var tier = 'standard';
+      if (x.kind !== 'kit') {
+        var prod = DATA.products.find(function(p){ return p.id === x.id; });
+        tier = (prod && prod.sizeTier) || 'standard';
+      }
+      var i = SIZE_TIER_ORDER.indexOf(tier);
+      if (i > best) best = i;
     });
+    return best === -1 ? 'standard' : SIZE_TIER_ORDER[best];
   }
 
-  function applyOversizeGate() {
-    var oversize = hasOversizeInCart();
+  // Friendly heads-up when the order needs a larger PUDO box (Medium/Large),
+  // so the higher locker rate isn't a surprise. Standard needs no note. All
+  // three tiers fit a locker, so the locker option is never hidden.
+  function applyBoxSizeNote() {
+    var tier = cartMaxTier();
     var notice = document.getElementById('oversizeNotice');
-    var lockerCard = document.getElementById('dm-locker');
-    if (notice) notice.style.display = oversize ? 'block' : 'none';
-    if (lockerCard) lockerCard.style.display = oversize ? 'none' : '';
+    if (!notice) return;
+    if (tier === 'medium' || tier === 'large') {
+      notice.style.display = 'block';
+      notice.innerHTML = 'This order ships in a larger PUDO box (' + SIZE_TIER_LABELS[tier] + '), so the locker rate is a little higher.';
+    } else {
+      notice.style.display = 'none';
+    }
   }
 
   function getShipping() {
@@ -3845,7 +3868,7 @@ footer > *{position:relative;z-index:1}
     renderCheckout();
     var apiBase = (window.VC_CONFIG && window.VC_CONFIG.WORKER_BASE_URL) || '';
     try {
-      var url = apiBase + '/api/ship/rate?method=' + currentDelivery + '&dest=' + encodeURIComponent(dest) + '&oversize=' + (hasOversizeInCart() ? 'true' : 'false');
+      var url = apiBase + '/api/ship/rate?method=' + currentDelivery + '&dest=' + encodeURIComponent(dest) + '&sizeTier=' + encodeURIComponent(cartMaxTier());
       if (currentDelivery === 'locker' && selectedLocker) {
         url += '&destCity=' + encodeURIComponent(selectedLocker.city || '') + '&destProvince=' + encodeURIComponent(selectedLocker.province || '');
       }
@@ -4026,7 +4049,6 @@ footer > *{position:relative;z-index:1}
   }
 
   window.selectDelivery = function(type) {
-    if (type === 'locker' && hasOversizeInCart()) type = 'door'; // gated — shouldn't normally happen, belt-and-braces
     currentDelivery = type;
     // Toggle card active state
     ['locker','door','pickup'].forEach(function(m) {
@@ -5786,7 +5808,7 @@ footer > *{position:relative;z-index:1}
       colors: r.colors || [],
       badge: r.badge,
       active: r.active,
-      oversize: !!r.oversize,
+      sizeTier: r.size_tier || 'standard',
       images: r.images || [],
       sortOrder: r.sort_order || 0
     };
