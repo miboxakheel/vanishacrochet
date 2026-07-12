@@ -2454,6 +2454,9 @@ footer > *{position:relative;z-index:1}
 
           <!-- Address fields (shown when Door selected) -->
           <div id="deliveryAddressFields" style="display:none">
+          <div style="margin-bottom:14px;padding:10px 14px;background:var(--skyl);border-radius:8px;font-size:12px;color:var(--tm);line-height:1.6">
+            We currently only ship within South Africa via the site — if you're ordering from outside South Africa, please <a href="#" onclick="showPage('contact');return false" style="color:var(--skyd);font-weight:700;text-decoration:none">get in touch</a> and we'll see what we can arrange.
+          </div>
           <div class="ck-field" id="field-street">
             <label>Street Address *</label>
             <input type="text" id="ck-street" name="address-line1" autocomplete="section-shipping address-line1" placeholder="123 Street Name, Suburb" oninput="clearErr('field-street')" onblur="resolveShippingRate()">

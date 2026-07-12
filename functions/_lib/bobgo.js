@@ -37,6 +37,21 @@
 // - No endpoint exposes a pre-configured warehouse/collection address for the
 //   account (checked /accounts) — the store's collection address must be
 //   configured here via env vars (SHIP_FROM_*, see wrangler.toml).
+// - The collection side can ALSO be a locker, via `collection_pickup_point_
+//   location_id` + a required `pickup_point_provider_slug` (verified) — this
+//   is what makes a genuine Locker-to-Locker quote (Bob Box, priced by parcel
+//   size, not distance) rather than an address-to-locker quote. The slug
+//   scopes the quote to ONE courier (only couriers that support locker
+//   collection will respond — confirmed one sandbox provider explicitly
+//   rejects it with "does not support collection pickup points"), so which
+//   slug to use is an account-specific fact, not something to guess — see
+//   SHIP_FROM_LOCKER_ID / SHIP_FROM_LOCKER_PROVIDER_SLUG in wrangler.toml.
+//   Tried also giving Locker→Locker's collection point a real DOOR delivery
+//   address (no pickup_point_location_id) hoping for a distinct "locker
+//   collected, delivered to door" product — Bob Go still only returned the
+//   same Bob Box/pickup-point rate, so that combination doesn't appear to
+//   exist as a real product on this account. Door deliveries stay
+//   address-to-address (unchanged) rather than guessing further.
 
 const BOBGO_BASE = {
   sandbox: 'https://api.sandbox.bobgo.co.za/v2',
@@ -194,13 +209,25 @@ function parcelFor(oversize) {
     : [{ submitted_length_cm: 30, submitted_width_cm: 20, submitted_height_cm: 15, submitted_weight_kg: 1 }];
 }
 
-async function createRateRequest(env, { deliveryAddress, pickupPointLocationId, oversize }) {
+// Set once Vanisha has chosen her own regular drop-off locker — until then,
+// Locker quotes fall back to address-based collection (SHIP_FROM_*), which
+// returns the same Bob Box pricing anyway since it's sized-based not
+// distance-based, so nothing breaks while this is unset.
+function hasCollectionLockerConfig(env) {
+  return !!(env.SHIP_FROM_LOCKER_ID && env.SHIP_FROM_LOCKER_PROVIDER_SLUG);
+}
+
+async function createRateRequest(env, { deliveryAddress, pickupPointLocationId, oversize, useCollectionLocker }) {
   const body = {
     collection_address: originAddress(env),
     delivery_address: deliveryAddress,
     parcels: parcelFor(oversize)
   };
   if (pickupPointLocationId) body.pickup_point_location_id = pickupPointLocationId;
+  if (useCollectionLocker && hasCollectionLockerConfig(env)) {
+    body.collection_pickup_point_location_id = Number(env.SHIP_FROM_LOCKER_ID);
+    body.pickup_point_provider_slug = env.SHIP_FROM_LOCKER_PROVIDER_SLUG;
+  }
 
   const res = await fetch(`${bobgoBase(env)}/rates`, {
     method: 'POST',
@@ -299,7 +326,10 @@ export async function fetchRate(env, { method, dest, oversize, destCity, destPro
     deliveryAddress = { street_address: parts[0] || '', local_area: '', city: parts[1] || '', zone: parts[2] || '', code: '', country: 'ZA' };
   }
 
-  const created = await createRateRequest(env, { deliveryAddress, pickupPointLocationId, oversize });
+  const created = await createRateRequest(env, {
+    deliveryAddress, pickupPointLocationId, oversize,
+    useCollectionLocker: method === 'locker'
+  });
   const resolved = isFullyResolved(created) ? created : await pollRateRequest(env, created.id, 4);
   if (!resolved) return { ok: false, error: 'Bob Go is taking too long to quote a rate — please try again' };
 

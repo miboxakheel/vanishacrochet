@@ -34,6 +34,18 @@ SHIP_FROM_PROVINCE = "KwaZulu Natal"
 SHIP_FROM_POSTAL = "4091"
 SHIP_FROM_COUNTRY = "ZA"
 
+# Vanisha's regular drop-off PUDO/Bob Box locker — set once to enable a real
+# Locker-to-Locker quote (priced by parcel size, not distance) instead of
+# address-based collection. Both must be set together or neither is used
+# (safe fallback to the address above). SHIP_FROM_LOCKER_PROVIDER_SLUG scopes
+# the quote to one courier — only couriers that support locker collection
+# will respond, so this is account-specific, not guessable; ask Bob Go
+# support or check which courier(s) offer it on your account. Current values
+# are the verified-working SANDBOX test locker/provider — replace both once
+# on a real production account with Vanisha's actual chosen locker.
+SHIP_FROM_LOCKER_ID = "216"
+SHIP_FROM_LOCKER_PROVIDER_SLUG = "demo"
+
 # ── SECRETS — do NOT add these here. Create with:
 #      wrangler pages secret put PAYSTACK_SECRET_KEY
 #      wrangler pages secret put SUPABASE_SERVICE_ROLE_KEY
