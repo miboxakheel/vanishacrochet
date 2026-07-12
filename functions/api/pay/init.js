@@ -145,21 +145,27 @@ export async function onRequestPost({ request, env }) {
       qty: x.qty,
       unit_price: x.price
     }));
-    if (itemRows.length) await sbInsert(env, 'order_items', itemRows);
 
     // Pattern purchases — same shape/semantics as the old client-side
     // saveOrderToDB: free patterns unlock immediately, paid ones link to
     // this order and unlock once the order's status leaves 'pending'.
     const patternLines = totals.lineItems.filter(x => x.kind === 'pattern');
-    if (patternLines.length && user) {
-      const purchaseRows = patternLines.map(x => ({
-        user_id: user.id,
-        local_pattern_id: x.id,
-        pattern_name: x.name,
-        order_id: x.price > 0 ? order.id : null
-      }));
-      await sbUpsert(env, 'pattern_purchases', purchaseRows, 'user_id,local_pattern_id');
-    }
+    const purchaseRows = (patternLines.length && user)
+      ? patternLines.map(x => ({
+          user_id: user.id,
+          local_pattern_id: x.id,
+          pattern_name: x.name,
+          order_id: x.price > 0 ? order.id : null
+        }))
+      : [];
+
+    // order_items and pattern_purchases both depend only on order.id (just
+    // inserted) and not on each other — fire them together so it's one
+    // SA->eu-west round trip instead of two sequential ones.
+    await Promise.all([
+      itemRows.length ? sbInsert(env, 'order_items', itemRows) : Promise.resolve(),
+      purchaseRows.length ? sbUpsert(env, 'pattern_purchases', purchaseRows, 'user_id,local_pattern_id') : Promise.resolve()
+    ]);
 
     const mock = env.MOCK_PAYMENTS === 'true';
     const responseBase = {
