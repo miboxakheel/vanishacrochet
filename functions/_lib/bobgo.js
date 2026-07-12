@@ -58,6 +58,23 @@ const BOBGO_BASE = {
   production: 'https://api.bobgo.co.za/v2'
 };
 
+// Bare `fetch()` never times out on its own — a stalled Bob Go sandbox call
+// used to hang the whole checkout indefinitely with no way to recover. Every
+// Bob Go/geocoding call below goes through this so a stall fails fast enough
+// for the caller's existing flat-rate fallback (see init.js) to kick in.
+async function fetchWithTimeout(url, opts, ms) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, Object.assign({}, opts, { signal: controller.signal }));
+  } catch (err) {
+    if (err && err.name === 'AbortError') throw new Error(`Request to ${url} timed out after ${ms}ms`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function bobgoBase(env) {
   return env.BOBGO_ENV === 'production' ? BOBGO_BASE.production : BOBGO_BASE.sandbox;
 }
@@ -107,7 +124,7 @@ async function geocodeQuery(env, near) {
   }
 
   const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=za&q=${encodeURIComponent(near)}`;
-  const res = await fetch(url, { headers: { 'User-Agent': NOMINATIM_USER_AGENT, 'Accept-Language': 'en' } });
+  const res = await fetchWithTimeout(url, { headers: { 'User-Agent': NOMINATIM_USER_AGENT, 'Accept-Language': 'en' } }, 8000);
   if (!res.ok) throw new Error('Geocoding request failed: ' + res.status);
   const results = await res.json();
   const coords = results.length ? { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) } : null;
@@ -147,9 +164,9 @@ async function fetchLockersAt(env, lat, lng) {
   const cached = await cache.match(cacheKey);
   if (cached) return cached.json();
 
-  const res = await fetch(`${bobgoBase(env)}/locations?lat=${lat}&lng=${lng}`, {
+  const res = await fetchWithTimeout(`${bobgoBase(env)}/locations?lat=${lat}&lng=${lng}`, {
     headers: { Authorization: `Bearer ${env.BOBGO_API_KEY}`, Accept: 'application/json' }
-  });
+  }, 8000);
   if (!res.ok) throw new Error('Bob Go locations fetch failed: ' + res.status);
   const data = await res.json();
   // Bob Go can list the same physical locker once per provider offering it
@@ -229,7 +246,7 @@ async function createRateRequest(env, { deliveryAddress, pickupPointLocationId, 
     body.pickup_point_provider_slug = env.SHIP_FROM_LOCKER_PROVIDER_SLUG;
   }
 
-  const res = await fetch(`${bobgoBase(env)}/rates`, {
+  const res = await fetchWithTimeout(`${bobgoBase(env)}/rates`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${env.BOBGO_API_KEY}`,
@@ -237,7 +254,7 @@ async function createRateRequest(env, { deliveryAddress, pickupPointLocationId, 
       Accept: 'application/json'
     },
     body: JSON.stringify(body)
-  });
+  }, 8000);
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
     throw new Error(`Bob Go rate request failed: ${res.status} ${detail}`);
@@ -255,9 +272,9 @@ function isFullyResolved(rateRequest) {
 // customer's checkout indefinitely.
 async function pollRateRequest(env, id, attempts) {
   for (let i = 0; i < attempts; i++) {
-    const res = await fetch(`${bobgoBase(env)}/rates?id=${id}`, {
+    const res = await fetchWithTimeout(`${bobgoBase(env)}/rates?id=${id}`, {
       headers: { Authorization: `Bearer ${env.BOBGO_API_KEY}`, Accept: 'application/json' }
-    });
+    }, 8000);
     if (!res.ok) throw new Error('Bob Go rate poll failed: ' + res.status);
     const data = await res.json();
     const reqObj = (data.rate_requests && data.rate_requests[0]) || null;

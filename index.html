@@ -4255,18 +4255,32 @@ footer > *{position:relative;z-index:1}
     var deliveryType = currentDelivery;
     var savedItems = cart.slice();
 
+    // Both awaits below are bounded — a stalled session lookup or a stalled
+    // server response used to leave this button on "Processing..." forever
+    // with no recovery path (worst for pattern checkout, the one flow that
+    // always needs a real logged-in session).
     var accessToken = null;
     try {
-      var sess = await window.sb.auth.getSession();
+      var sess = await Promise.race([
+        window.sb.auth.getSession(),
+        new Promise(function(_, reject){ setTimeout(function(){ reject(new Error('session-timeout')); }, 8000); })
+      ]);
       accessToken = sess && sess.data && sess.data.session ? sess.data.session.access_token : null;
     } catch (e) { /* guest checkout is fine — server treats a missing token as guest */ }
 
     var apiBase = (window.VC_CONFIG && window.VC_CONFIG.WORKER_BASE_URL) || '';
     var data;
+    // 45s, not 20s — the server's own Bob Go rate lookup (physical/kit carts)
+    // has its own bounded retries that can legitimately take up to ~45s on a
+    // slow sandbox before it gives up and falls back to a flat rate; this
+    // must not abort before that fallback has a chance to run.
+    var initController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var initTimeout = initController ? setTimeout(function(){ initController.abort(); }, 45000) : null;
     try {
       var res = await fetch(apiBase + '/api/pay/init', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: initController ? initController.signal : undefined,
         body: JSON.stringify({
           customer: { firstName: firstName, lastName: lastName, email: email, phone: phone },
           delivery: {
@@ -4278,13 +4292,15 @@ footer > *{position:relative;z-index:1}
             street: street, city: city, province: province, postalCode: postal, country: country
           },
           notes: notes,
-          items: savedItems.map(function(x){ return { kind: x.kind, id: x.id, size: x.size, color: x.color, qty: x.qty }; }),
+          items: savedItems.map(function(x){ return { kind: x.kind, id: x.id, patternId: x.patternId, size: x.size, color: x.color, qty: x.qty }; }),
           accessToken: accessToken
         })
       });
       data = await res.json();
     } catch (e) {
-      data = { ok: false, error: 'Could not reach the server — check your connection and try again.' };
+      data = { ok: false, error: (e && e.name === 'AbortError') ? 'The server took too long to respond — please try again.' : 'Could not reach the server — check your connection and try again.' };
+    } finally {
+      if (initTimeout) clearTimeout(initTimeout);
     }
 
     if (!data || !data.ok) {

@@ -38,6 +38,19 @@ export function computeOrderTotals({ cartLines, products, patterns, promotions, 
       unitPrice = Number(row.price) || 0;
       name = data.name || 'Pattern';
       kind = 'pattern';
+    } else if (line.kind === 'kit') {
+      // A kit is a physical add-on tied to a pattern (index.html's
+      // addKitToCart), not a row in `products` — its price/availability live
+      // in the parent pattern's data.kit, keyed by line.patternId.
+      row = patterns.find(p => String(p.local_id) === String(line.patternId));
+      if (!row || row.active === false) throw new Error('Unknown or inactive pattern for kit in cart: ' + line.patternId);
+      const data = row.data || {};
+      const kit = data.kit || {};
+      if (!kit.enabled) throw new Error('Kit is not available for this pattern: ' + line.patternId);
+      unitPrice = Number(kit.price) || 0;
+      name = (data.name || 'Pattern') + ' — Kit';
+      kind = 'kit';
+      hasPhysical = true;
     } else {
       row = products.find(p => String(p.local_id) === String(line.id));
       if (!row || row.active === false) throw new Error('Unknown or inactive product in cart: ' + line.id);

@@ -51,15 +51,20 @@ export async function onRequestPost({ request, env }) {
   }
 
   try {
-    const productIds = items.filter(x => x.kind !== 'pattern').map(x => x.id);
+    const productIds = items.filter(x => x.kind === 'product').map(x => x.id);
     const patternIds = items.filter(x => x.kind === 'pattern').map(x => x.id);
+    // Kit lines aren't rows in `products` — they need their parent pattern's
+    // data.kit for price/availability, so fetch those pattern rows too even
+    // though the kit itself never appears in `patternIds`.
+    const kitPatternIds = items.filter(x => x.kind === 'kit').map(x => x.patternId);
+    const neededPatternIds = Array.from(new Set(patternIds.concat(kitPatternIds).map(String)));
 
     // Batch every Supabase read in parallel — one round-trip set, not five
     // sequential ones (handoff §6: eu-west adds ~150-200ms per hop for SA users).
     const [settingsRes, productsRes, patternsRes, promotionsRes, user] = await Promise.all([
       sbSelect(env, 'settings', 'id=eq.1&select=data'),
       productIds.length ? sbSelect(env, 'products', `local_id=in.(${productIds.map(id => encodeURIComponent(id)).join(',')})&select=*`) : Promise.resolve([]),
-      patternIds.length ? sbSelect(env, 'patterns', `local_id=in.(${patternIds.map(id => encodeURIComponent(id)).join(',')})&select=*`) : Promise.resolve([]),
+      neededPatternIds.length ? sbSelect(env, 'patterns', `local_id=in.(${neededPatternIds.map(id => encodeURIComponent(id)).join(',')})&select=*`) : Promise.resolve([]),
       sbSelect(env, 'promotions', 'active=eq.true&select=*'),
       sbGetUserFromToken(env, body.accessToken)
     ]);
