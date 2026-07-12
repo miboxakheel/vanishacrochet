@@ -4220,6 +4220,17 @@ footer > *{position:relative;z-index:1}
             '<strong>Notes: </strong>' + getCheckoutNotes() + '</div>'
         : '');
 
+    // The confirm button is a single shared element reused for every
+    // checkout. confirmAndPlace()'s success path intentionally leaves it
+    // disabled/"Processing..." (the modal closes on success), so it MUST be
+    // reset here every time the modal reopens — otherwise the 2nd and every
+    // later checkout in the same session opens with a dead, already-
+    // "Processing..." button and appears to hang forever. Reset last, after
+    // all the early-return validation above, so it only fires when the modal
+    // actually opens.
+    var confirmBtn = document.getElementById('confirmPlaceBtn');
+    if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Proceed to Payment'; }
+
     document.getElementById('reviewModal').classList.add('open');
     document.body.style.overflow = 'hidden';
   };
