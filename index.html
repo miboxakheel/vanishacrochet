@@ -2468,21 +2468,35 @@ footer > *{position:relative;z-index:1}
               <input type="text" id="ck-city" name="city" autocomplete="section-shipping address-level2" placeholder="e.g. Cape Town" oninput="clearErr('field-city')" onblur="resolveShippingRate()">
               <span class="err-msg">Please enter your city</span>
             </div>
-            <div class="ck-field">
-              <label>Postal Code</label>
-              <input type="text" id="ck-postal" name="postal" autocomplete="section-shipping postal-code" placeholder="e.g. 8001">
+            <div class="ck-field" id="field-postal">
+              <label>Postal Code *</label>
+              <input type="text" id="ck-postal" name="postal" autocomplete="section-shipping postal-code" placeholder="e.g. 8001" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" oninput="clearErr('field-postal')" onblur="resolveShippingRate()">
+              <span class="err-msg">SA postal codes are 4 digits</span>
             </div>
           </div>
           <div class="ck-row">
-            <div class="ck-field">
-              <label>State / Province / Region</label>
-              <input type="text" id="ck-province" name="state" autocomplete="section-shipping address-level1" placeholder="e.g. Western Cape" onblur="resolveShippingRate()">
+            <div class="ck-field" id="field-province">
+              <label>Province *</label>
+              <select id="ck-province" name="state" autocomplete="section-shipping address-level1" onchange="clearErr('field-province');resolveShippingRate()">
+                <option value="">Select province…</option>
+                <option value="Eastern Cape">Eastern Cape</option>
+                <option value="Free State">Free State</option>
+                <option value="Gauteng">Gauteng</option>
+                <option value="KwaZulu-Natal">KwaZulu-Natal</option>
+                <option value="Limpopo">Limpopo</option>
+                <option value="Mpumalanga">Mpumalanga</option>
+                <option value="Northern Cape">Northern Cape</option>
+                <option value="North West">North West</option>
+                <option value="Western Cape">Western Cape</option>
+              </select>
+              <span class="err-msg">Please select your province</span>
             </div>
             <div class="ck-field">
               <label>Country</label>
-              <input type="text" id="ck-country" name="country" autocomplete="section-shipping country-name" placeholder="e.g. South Africa">
+              <input type="text" id="ck-country" name="country" autocomplete="section-shipping country-name" placeholder="South Africa" value="South Africa" readonly style="background:var(--skyl);cursor:not-allowed">
             </div>
           </div>
+          <div id="addressConfirmBox" style="display:none;margin-top:4px;margin-bottom:14px;padding:10px 14px;border-radius:8px;font-size:12px;line-height:1.6"></div>
           </div><!-- end deliveryAddressFields -->
 
           <!-- Pickup info box (shown when pickup selected) -->
@@ -3811,10 +3825,22 @@ footer > *{position:relative;z-index:1}
   // before submitting.
   window.resolveShippingRate = async function() {
     if (isDigitalOnly() || currentDelivery === 'pickup') { resolvedShippingRate = null; renderCheckout(); return; }
-    var dest = currentDelivery === 'locker'
-      ? (selectedLocker ? selectedLocker.id : '')
-      : [document.getElementById('ck-street').value, document.getElementById('ck-city').value, document.getElementById('ck-province').value].filter(Boolean).join(', ').trim();
-    if (!dest) { resolvedShippingRate = null; renderCheckout(); return; }
+
+    var confirmBox = document.getElementById('addressConfirmBox');
+    var dest;
+    if (currentDelivery === 'locker') {
+      dest = selectedLocker ? String(selectedLocker.id) : '';
+    } else {
+      var street = document.getElementById('ck-street').value.trim();
+      var city   = document.getElementById('ck-city').value.trim();
+      var province = document.getElementById('ck-province').value;
+      var postal = document.getElementById('ck-postal').value.trim();
+      // Don't fire a lookup on a half-filled door address — wait for the
+      // fields that actually matter to Bob Go's geocoding.
+      if (!street || !city || !province) { resolvedShippingRate = null; if (confirmBox) confirmBox.style.display = 'none'; renderCheckout(); return; }
+      dest = [street, city, province, postal].filter(Boolean).join(', ');
+    }
+    if (!dest) { resolvedShippingRate = null; if (confirmBox) confirmBox.style.display = 'none'; renderCheckout(); return; }
 
     shippingResolving = true;
     renderCheckout();
@@ -3828,6 +3854,28 @@ footer > *{position:relative;z-index:1}
       var data = await res.json();
       resolvedShippingRate = data.ok ? data.rate : null;
       if (!data.ok) showToast(data.error || 'Could not get a shipping rate');
+
+      // Door only: show what Bob Go actually understood the address as, and
+      // flag it if the match looks fuzzy — the closest we can get to
+      // autocomplete's "did you mean" without live autocomplete itself.
+      if (currentDelivery === 'door' && confirmBox) {
+        if (data.ok && data.resolvedAddress) {
+          confirmBox.style.display = 'block';
+          if (data.addressPrecise) {
+            confirmBox.style.background = '#f0fdf4';
+            confirmBox.style.border = '1px solid #86efac';
+            confirmBox.style.color = '#166534';
+            confirmBox.innerHTML = '✓ Shipping to: <strong>' + escLockerText(data.resolvedAddress) + '</strong>';
+          } else {
+            confirmBox.style.background = '#fffbeb';
+            confirmBox.style.border = '1px solid #f59e0b';
+            confirmBox.style.color = '#78350f';
+            confirmBox.innerHTML = '⚠ We could only roughly match this address to: <strong>' + escLockerText(data.resolvedAddress) + '</strong> — please double-check your street and suburb are correct, or delivery may be delayed.';
+          }
+        } else {
+          confirmBox.style.display = 'none';
+        }
+      }
     } catch (e) {
       resolvedShippingRate = null;
     }
@@ -4083,8 +4131,12 @@ footer > *{position:relative;z-index:1}
     if (!isDigitalOnly() && currentDelivery === 'door') {
       var street = document.getElementById('ck-street').value.trim();
       var city   = document.getElementById('ck-city').value.trim();
+      var province = document.getElementById('ck-province').value;
+      var postal = document.getElementById('ck-postal').value.trim();
       if (!street) { ckFieldErr('field-street','Please enter your street address'); ok=false; }
       if (!city)   { ckFieldErr('field-city','Please enter your city'); ok=false; }
+      if (!province) { ckFieldErr('field-province','Please select your province'); ok=false; }
+      if (!postal || !/^[0-9]{4}$/.test(postal)) { ckFieldErr('field-postal','SA postal codes are 4 digits'); ok=false; }
     }
     if (!isDigitalOnly() && currentDelivery === 'locker' && !selectedLocker) {
       ckFieldErr('field-locker','Please choose a locker');

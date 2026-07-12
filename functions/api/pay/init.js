@@ -85,7 +85,7 @@ export async function onRequestPost({ request, env }) {
     let shipping = 0;
     let lockerDetails = null;
     if (!cartTotals.isDigitalOnly && delivery.type !== 'pickup') {
-      const dest = delivery.type === 'locker' ? delivery.lockerId : [delivery.street, delivery.city, delivery.province].filter(Boolean).join(', ');
+      const dest = delivery.type === 'locker' ? delivery.lockerId : [delivery.street, delivery.city, delivery.province, delivery.postalCode].filter(Boolean).join(', ');
       try {
         const rateResult = await fetchRate(env, { method: delivery.type, dest, oversize: cartTotals.hasOversizeItem, destCity: delivery.lockerCity, destProvince: delivery.lockerProvince });
         if (!rateResult.ok) {

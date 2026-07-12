@@ -322,8 +322,11 @@ export async function fetchRate(env, { method, dest, oversize, destCity, destPro
       code: '', country: 'ZA'
     };
   } else {
+    // street, city, province, postal code — postal code materially improves
+    // Bob Go's own geocoding precision, so it's included even though it's not
+    // required to place an order.
     const parts = String(dest).split(',').map(s => s.trim());
-    deliveryAddress = { street_address: parts[0] || '', local_area: '', city: parts[1] || '', zone: parts[2] || '', code: '', country: 'ZA' };
+    deliveryAddress = { street_address: parts[0] || '', local_area: '', city: parts[1] || '', zone: parts[2] || '', code: parts[3] || '', country: 'ZA' };
   }
 
   const created = await createRateRequest(env, {
@@ -336,11 +339,26 @@ export async function fetchRate(env, { method, dest, oversize, destCity, destPro
   const wantType = method === 'locker' ? 'pickup-point' : 'door';
   const best = cheapestForDeliveryType(resolved, wantType);
   if (!best) return { ok: false, error: 'No rate available for that destination' };
-  return {
+
+  const result = {
     ok: true,
     rate: best.rate_amount,
     currency: 'ZAR',
     service: (best.service_level && best.service_level.name) || '',
     etaDays: ''
   };
+
+  // Door only: surface Bob Go's OWN geocoding confidence for the address the
+  // customer typed, instead of silently discarding it. No live autocomplete
+  // (decided against — Nominatim isn't licensed for that usage pattern), but
+  // this lets the customer catch a typo before it affects their rate: a
+  // 'ROOFTOP' match found the exact address; 'APPROXIMATE'/partial means Bob
+  // Go could only place it roughly (street-level typo, missing suburb, etc.).
+  if (method === 'door' && resolved.delivery_address) {
+    const da = resolved.delivery_address;
+    result.resolvedAddress = [da.street_address, da.local_area, da.city, da.zone_name].filter(Boolean).join(', ');
+    result.addressPrecise = da.geo_location_type === 'ROOFTOP' && !da.geo_partial_match;
+  }
+
+  return result;
 }
