@@ -1702,7 +1702,7 @@ footer > *{position:relative;z-index:1}
 </div>
 
 <!-- WHATSAPP FLOATING BUTTON (Enhancement 17) -->
-<a id="waFloat" class="wa-float" href="#" target="_blank" rel="noopener" title="Chat on WhatsApp" aria-label="Chat on WhatsApp">💬</a>
+<a id="waFloat" class="wa-float" href="#" target="_blank" rel="noopener" title="Chat on WhatsApp" aria-label="Chat on WhatsApp"><svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor" aria-hidden="true"><path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 1.67c2.2 0 4.27.86 5.82 2.42a8.19 8.19 0 0 1 2.41 5.82c0 4.54-3.7 8.23-8.24 8.23-1.48 0-2.93-.4-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.19 8.19 0 0 1-1.26-4.38c0-4.54 3.7-8.24 8.24-8.24zm4.52 9.87c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.12-.16.25-.64.81-.79.97-.14.17-.29.19-.54.06-.25-.12-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.02-.38.11-.51.11-.11.25-.29.37-.43.12-.14.16-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.4-.42-.56-.42-.14 0-.31-.02-.47-.02-.16 0-.43.06-.65.31-.23.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.12.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.48-.07 1.47-.6 1.68-1.18.21-.58.21-1.07.14-1.18-.06-.11-.22-.17-.47-.29z"/></svg></a>
 
 <!-- AUTH MODAL (login / signup) -->
 <div class="auth-overlay" id="authOverlay">
@@ -2784,6 +2784,16 @@ footer > *{position:relative;z-index:1}
   // until the admin uploads a real logo via Cloudinary (settings.logoImage) ──
   var DEFAULT_LOGO = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'%3E%3Ccircle cx='30' cy='30' r='29' fill='%23E7F2F3'/%3E%3Cg fill='none' stroke='%231F7A8C' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='30' cy='32' r='13'/%3E%3Cpath d='M18 26c6 2 18 2 24 0M16 32c8 3 20 3 28 0M18 38c6 2 18 2 24 0'/%3E%3Cpath d='M38 20l6-6'/%3E%3C/g%3E%3C/svg%3E";
 
+  // Normalise a phone number for wa.me links. wa.me needs full international
+  // digits with no leading 0 and no '+'. A South African mobile is stored
+  // locally as 0XXXXXXXXX (10 digits) — convert that to 27XXXXXXXXX. Numbers
+  // already in international form (27…, 263…, +27…) are left as-is.
+  function waNumber(raw) {
+    var n = (raw || '').replace(/[^0-9]/g, '');
+    if (n.length === 10 && n.charAt(0) === '0') n = '27' + n.slice(1);
+    return n;
+  }
+
   // ── Apply settings to page ──────────────────────────────────────────────
   function applySettings() {
     document.title = S.storeName + ' – ' + S.tagline;
@@ -3020,7 +3030,7 @@ footer > *{position:relative;z-index:1}
       document.getElementById('contactWaWrap').style.display = 'flex';
       var waEl = document.getElementById('contactWa');
       waEl.textContent = S.whatsapp;
-      waEl.href = 'https://wa.me/' + S.whatsapp.replace(/[^0-9]/g,'');
+      waEl.href = 'https://wa.me/' + waNumber(S.whatsapp);
     }
 
     // Social links
@@ -3033,7 +3043,7 @@ footer > *{position:relative;z-index:1}
       sb.innerHTML = '';
       if (S.facebook)  sb.innerHTML += '<a class="social-btn social-btn-fb" href="' + S.facebook + '" target="_blank"><span>📘</span> Facebook</a>';
       if (S.instagram) sb.innerHTML += '<a class="social-btn social-btn-ig" href="' + S.instagram + '" target="_blank"><span>📸</span> Instagram</a>';
-      if (S.whatsapp)  sb.innerHTML += '<a class="social-btn social-btn-wa" href="https://wa.me/' + S.whatsapp.replace(/[^0-9]/g,'') + '" target="_blank"><span>💬</span> WhatsApp</a>';
+      if (S.whatsapp)  sb.innerHTML += '<a class="social-btn social-btn-wa" href="https://wa.me/' + waNumber(S.whatsapp) + '" target="_blank"><span>💬</span> WhatsApp</a>';
     }
     // Keep footer social links working too
     var sl = document.getElementById('socialLinks');
@@ -3041,8 +3051,29 @@ footer > *{position:relative;z-index:1}
       sl.innerHTML = '';
       if (S.facebook)  sl.innerHTML += '<a class="social-link" href="' + S.facebook + '" target="_blank"><span>📘</span> Facebook</a>';
       if (S.instagram) sl.innerHTML += '<a class="social-link" href="' + S.instagram + '" target="_blank"><span>📸</span> Instagram</a>';
-      if (S.whatsapp)  sl.innerHTML += '<a class="social-link" href="https://wa.me/' + S.whatsapp.replace(/[^0-9]/g,'') + '" target="_blank"><span>💬</span> WhatsApp</a>';
+      if (S.whatsapp)  sl.innerHTML += '<a class="social-link" href="https://wa.me/' + waNumber(S.whatsapp) + '" target="_blank"><span>💬</span> WhatsApp</a>';
     }
+
+    // Floating WhatsApp button. Wired HERE (inside applySettings) so it uses
+    // the live number — applySettings re-runs after the Supabase load, whereas
+    // the old one-time init read the empty seed value and the button never
+    // appeared. Idempotent: sets the link every run, schedules the entrance
+    // animation only once.
+    (function(){
+      var btn = document.getElementById('waFloat');
+      if (!btn) return;
+      var wa = waNumber(S.whatsapp);
+      if (wa) {
+        btn.href = 'https://wa.me/' + wa + '?text=Hi%20Vanisha!%20I%20saw%20your%20crochet%20store%20and%20have%20a%20question%20🧶';
+        if (!btn.dataset.waScheduled) {
+          btn.dataset.waScheduled = '1';
+          setTimeout(function(){ btn.classList.add('show'); }, 2000);
+        }
+      } else {
+        btn.classList.remove('show');   // no number configured → keep it hidden
+      }
+    })();
+
     // Render reels if any
     renderReels();
 
@@ -6243,14 +6274,8 @@ footer > *{position:relative;z-index:1}
 
 
   // ── WhatsApp float ──────────────────────────────────────────────────────
-  (function(){
-    var wa = S.whatsapp ? S.whatsapp.replace(/[^0-9]/g,'') : '';
-    var btn = document.getElementById('waFloat');
-    if (btn && wa) {
-      btn.href = 'https://wa.me/' + wa + '?text=Hi%20Vanisha!%20I%20saw%20your%20crochet%20store%20and%20have%20a%20question%20🧶';
-      setTimeout(function(){ btn.classList.add('show'); }, 8000);
-    }
-  })();
+  // (Wiring lives in applySettings() so it runs with the live Supabase number,
+  // not the empty embedded seed. See the float block there.)
 
   // ── Wishlist ──────────────────────────────────────────────────────────────
   // Logged OUT: tracked in browser localStorage only.
